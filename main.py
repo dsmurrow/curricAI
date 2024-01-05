@@ -38,29 +38,60 @@ def print_list_and_query_input(header, items):
 	return user_input
 
 def scan_new_curriculums(path):
+	has_right_columns = lambda df: 'Description' in df.columns and 'Standard' in df.columns
+
 	files = filter(lambda p: p.is_file(), path.iterdir())
 
 	dfs = []
 	for child in files:
 		maybe_df = read_sheet(child)
 		if isinstance(maybe_df, dict):
-			dfs.extend(maybe_df.items())
+			for (name, df) in maybe_df.items():
+				if has_right_columns(df):
+					dfs.append((name, df))
 		elif maybe_df is None:
 			continue
-		else:
+		elif has_right_columns(maybe_df):
 			dfs.append((child.name, maybe_df))
 
 	return dfs		
+
+def establish_new_curriculums(named_dfs):
+	for (name, df) in named_dfs: # TODO: Check for duplicates
+		header = (
+			f'New curriculum "{name}".\n'
+			'Would you like to give it a different name?'
+		)
+		options = ['Yes', 'No']
+
+		selection = print_list_and_query_input(header, options)
+
+		if selection == 1:
+			name = input('New name: ')
+
+		# TODO: Make directories for them
+		df = df[['Standard', 'Description']]
+
+		# TODO: Get embeddings
+		
+def main_loop():
+	SCAN_OPTION_STRING = 'Scan'
+	EXIT_OPTION_STRING = 'Exit'
+	items = ['bruh', 'two', 'three', SCAN_OPTION_STRING, EXIT_OPTION_STRING]
+
+	header = 'Chews!'
+
+	selection = 1
+	while items[selection - 1] != EXIT_OPTION_STRING:
+		selection = print_list_and_query_input(header, items)
+		
+		if items[selection - 1] == SCAN_OPTION_STRING:
+			currics = scan_new_curriculums(cwd)
+			establish_new_curriculums(currics)
 
 if __name__ == '__main__':
 	if not curriculum_path.exists() or not curriculum_path.is_dir():
 		curriculum_path.mkdir()
 
-	items = ['bubkis', 'an option', 'heck yeah', 'chews', 'scan']
-	header = 'CHOOSE!!!!'
-	selection = print_list_and_query_input(header, items)
-
-	if items[selection - 1] == 'scan':
-		currics = scan_new_curriculums(cwd)
-		for (name, df) in currics:
-			print(name)
+	main_loop()
+	
