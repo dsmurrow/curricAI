@@ -2,3 +2,5 @@
 *.csv
 *.ods
 /data/
+*.env
+.vimrc
