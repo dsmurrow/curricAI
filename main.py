@@ -1,10 +1,21 @@
+from itertools import zip_longest
+from openai import OpenAI
 import os
 import pandas as pd
 from pathlib import Path
+import re
+import tiktoken
+
+client = OpenAI()
+
+encoding = tiktoken.get_encoding('cl100k_base')
 
 cwd = Path.cwd()
-curriculum_path = cwd / 'currics'
+data_path = cwd / 'data'
+curriculum_table_path = data_path / 'curriculums.txt'
+curriculum_path = data_path / 'currics'
 
+max_tokens = 8000
 
 def intify(x):
 	try:
@@ -42,37 +53,71 @@ def scan_new_curriculums(path):
 
 	files = filter(lambda p: p.is_file(), path.iterdir())
 
+	# TODO: figure out why it's skipping 4th grade
 	dfs = []
 	for child in files:
 		maybe_df = read_sheet(child)
 		if isinstance(maybe_df, dict):
 			for (name, df) in maybe_df.items():
 				if has_right_columns(df):
-					dfs.append((name, df))
+					dfs.append((name, df.dropna()))
 		elif maybe_df is None:
 			continue
 		elif has_right_columns(maybe_df):
-			dfs.append((child.name, maybe_df))
+			dfs.append((child.name, maybe_df.dropna()))
 
 	return dfs		
 
+def embed_string(string, model='text-embedding-ada-002'):
+	text = text.replace('\n', ' ')
+	return client.embeddings.create(input=text, model=model)
+	
+
+def token_len(x):
+	print(x)
+	return len(encoding.encode(x))
 def establish_new_curriculums(named_dfs):
-	for (name, df) in named_dfs: # TODO: Check for duplicates
+	print(list(zip(*named_dfs))[0])
+	too_many_tokens = lambda df: df.Description.apply(token_len).gt(max_tokens).any()
+	filtered_dfs = filter(lambda p: not too_many_tokens(p[1]), named_dfs)
+
+
+	for (name, df) in filtered_dfs: # TODO: Check for duplicates
 		header = (
 			f'New curriculum "{name}".\n'
 			'Would you like to give it a different name?'
-		)
+		)	
 		options = ['Yes', 'No']
 
 		selection = print_list_and_query_input(header, options)
 
 		if selection == 1:
 			name = input('New name: ')
+			name = re.sub('[#%&{}\\<>*?/$!\'":@+`|=]', '', name)
 
 		# TODO: Make directories for them
 		df = df[['Standard', 'Description']]
 
+				
+
 		# TODO: Get embeddings
+		
+
+def scan_for_curriculums():
+	if not curriculum_table_path.exists() or not curriculum_table_path.is_file():
+		curriculum_table_path.touch()
+
+	currics = []
+
+	with open(curriculum_table_path, 'r') as file:
+		lines = map(lambda x: x[:-1], file.readlines())
+
+		args = [lines] * 2
+		pairs = zip_longest(*args, fillvalue=None)
+
+		# TODO: put into list
+					
+	return currics
 		
 def main_loop():
 	SCAN_OPTION_STRING = 'Scan'
@@ -83,6 +128,7 @@ def main_loop():
 
 	selection = 1
 	while items[selection - 1] != EXIT_OPTION_STRING:
+		curriculums = scan_for_curriculums()
 		selection = print_list_and_query_input(header, items)
 		
 		if items[selection - 1] == SCAN_OPTION_STRING:
@@ -90,6 +136,8 @@ def main_loop():
 			establish_new_curriculums(currics)
 
 if __name__ == '__main__':
+	if not data_path.exists() or not data_path.is_dir():
+		data_path.mkdir()
 	if not curriculum_path.exists() or not curriculum_path.is_dir():
 		curriculum_path.mkdir()
 
