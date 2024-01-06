@@ -95,7 +95,7 @@ def scan_new_curriculums(path):
 	return dfs		
 
 def embed_string(string, model='text-embedding-ada-002'):
-	text = text.replace('\n', ' ')
+	text = string.replace('\n', ' ')
 	return client.embeddings.create(input=text, model=model)
 	
 
@@ -168,10 +168,10 @@ def scan_for_curriculums():
 
 def removing_menu(curriculums):
 	header = (
-			'Write the numbers corresponding to the curriculums you\'d like to remove.\n'
-			'Separate entries by leaving space between them.\n'
-			'Type \'*\' to remove all curriculums.\n'
-			'Leave blank if you\'d like to leave this menu.'
+		'Write the numbers corresponding to the curriculums you\'d like to remove.\n'
+		'Separate entries by leaving space between them.\n'
+		'Type \'*\' to remove all curriculums.\n'
+		'Leave blank if you\'d like to leave this menu.'
 	)
 
 	clear()
@@ -211,6 +211,8 @@ def removing_menu(curriculums):
 
 		curriculum_dir = curriculum_path / name
 
+		print(f'deleting {curriculum_dir}')
+		assert(curriculum_dir.exists() and curriculum_dir.is_dir())
 		shutil.rmtree(curriculum_dir)
 
 		del curriculums[i]
@@ -225,25 +227,25 @@ def curriculum_menu(curriculum):
 	options = ['Query', 'Remove', 'Back']
 
 	selected_number = print_list_and_query_input(curriculum, options)
-	selection = options[selected_number]
+	selection = options[selected_number - 1]
 
 	if selection == 'Back':
 		return True
 	elif selection == 'Remove':
 		confirmation = input('Are you sure? (Y)es or (N)o: ')
-		if confirmation.lower()[0] != 'y':
+		if confirmation[0].lower() != 'y':
 			return False
 
+		print(bytes(curriculum, 'utf8'))
 		shutil.rmtree(curriculum_path / curriculum)
 
-		with open(curriculum_table_path, 'r+') as f:
-			lines = map(lambda x: x[:-1], f.readlines())
+		with open(curriculum_table_path, 'r') as f:
+			lines = filter(lambda x: x != curriculum, map(lambda x: x[:-1], f.readlines()))
 
-			f.truncate()
-
+		with open(curriculum_table_path, 'w') as f:
 			for line in lines:
-				if line != curriculum:
-					fp.write(line + '\n')
+				f.write(line + '\n')
+
 		return True
 	else:
 		# TODO: Querying functionality
@@ -276,7 +278,7 @@ def main_loop():
 		elif current_selection != EXIT_OPTION_STRING:
 			status = False
 			while not status:
-				curriculum_menu(current_selection)
+				status = curriculum_menu(current_selection)
 
 if __name__ == '__main__':
 	if not data_path.exists() or not data_path.is_dir():
