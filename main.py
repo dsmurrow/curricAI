@@ -45,12 +45,14 @@ def print_list_and_query_input(header, items):
 	max_accepted_input = len(items)
 	is_valid = lambda x: x >= 1 and x <= max_accepted_input
 
+	padding = len(str(len(items)))
+
 	user_input = -1
 	while not is_valid(user_input):
 		clear()
 		print(header)
 		for (i, item) in enumerate(items):
-			print(f'{i+1}. {item}')
+			print(f'{i+1:>{padding}}. {item}')
 
 		user_input = intify(input('Choose an option: '))
 
@@ -102,7 +104,6 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
 	for name, df in filtered_dfs:
 		header = (
 			f'New curriculum "{name}"\n'
-			f'{names_used}'
 			'Would you like to give it a different name?'
 		)	
 
