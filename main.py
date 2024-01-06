@@ -4,6 +4,7 @@ import os
 import pandas as pd
 from pathlib import Path
 import re
+import shutil
 import tiktoken
 
 client = OpenAI()
@@ -41,6 +42,18 @@ def read_sheet(path):
 	else:
 		return None
 
+def print_list(header, items, indeces=None):
+	padding = len(str(len(items)))
+
+	if indeces is None:
+		iterator = enumerate(items)
+	else:
+		iterator = zip(indeces, items)
+
+	print(header)
+	for i, item in iterator:
+		print(f'{i+1:>{padding}}. {item}')
+
 def print_list_and_query_input(header, items):
 	max_accepted_input = len(items)
 	is_valid = lambda x: x >= 1 and x <= max_accepted_input
@@ -50,9 +63,7 @@ def print_list_and_query_input(header, items):
 	user_input = -1
 	while not is_valid(user_input):
 		clear()
-		print(header)
-		for (i, item) in enumerate(items):
-			print(f'{i+1:>{padding}}. {item}')
+		print_list(header, items)
 
 		user_input = intify(input('Choose an option: '))
 
@@ -154,11 +165,67 @@ def scan_for_curriculums():
 		currics = list(map(lambda x: x[:-1], file))
 
 	return currics
+
+def removing_menu(curriculums):
+	header = (
+			'Write the numbers corresponding to the curriculums you\'d like to remove.\n'
+			'Separate entries by leaving space between them.\n'
+			'Type \'*\' to remove all curriculums.\n'
+			'Leave blank if you\'d like to leave this menu.'
+	)
+
+	clear()
+	print_list(header, curriculums)
+	selections = input('Selections: ').split()
+
+	if len(selections) == 0:
+		return True
+	# Delete everything
+	elif len(selections) > 0 and selections[0] == '*':
+		selections = list(range(1, len(curriculums) + 1))
+
+	index_set = set()
+	for item in selections:
+		try:
+			index_set.add(int(item))
+		except:
+			input('Invalid input detected. Press Enter to return to main menu.\n')
+			return True
+
+	# Input sanitization: In-bounds, 0-based.
+	indeces = filter(lambda x: x in range(1, len(curriculums) + 1), index_set)
+	indeces = list(map(lambda x: x - 1, indeces))
+
+	clear()
+	header = 'Items to be deleted.'
+	print_list(header, [curriculums[i] for i in indeces], indeces=indeces)
+
+	selection = input('Delete these items? (Y)es or (N)o: ')
+	if selection[0].lower() != 'y':
+		return False
+
+	indeces.sort(reverse=True)
+
+	for i in indeces:
+		name = curriculums[i]
+
+		curriculum_dir = curriculum_path / name
+
+		shutil.rmtree(curriculum_dir)
+
+		del curriculums[i]
+
+	with open(curriculum_table_path, 'w') as f:
+		for curriculum in curriculums:
+			f.write(curriculum + '\n')
+
+	return True
 		
 def main_loop():
 	SCAN_OPTION_STRING = 'Scan'
+	REMOVE_OPTION_STRING = 'Remove Curriculums'
 	EXIT_OPTION_STRING = 'Exit'
-	items = [SCAN_OPTION_STRING, EXIT_OPTION_STRING]
+	items = [SCAN_OPTION_STRING, REMOVE_OPTION_STRING, EXIT_OPTION_STRING]
 
 	header = 'Chews!'
 
@@ -174,6 +241,10 @@ def main_loop():
 		if current_selection == SCAN_OPTION_STRING:
 			currics = scan_new_curriculums(cwd)
 			establish_new_curriculums(currics, set(curriculums))
+		elif current_selection == REMOVE_OPTION_STRING:
+			status = False
+			while not status:
+				status = removing_menu(curriculums)
 
 if __name__ == '__main__':
 	if not data_path.exists() or not data_path.is_dir():
