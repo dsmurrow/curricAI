@@ -220,6 +220,34 @@ def removing_menu(curriculums):
 			f.write(curriculum + '\n')
 
 	return True
+
+def curriculum_menu(curriculum):
+	options = ['Query', 'Remove', 'Back']
+
+	selected_number = print_list_and_query_input(curriculum, options)
+	selection = options[selected_number]
+
+	if selection == 'Back':
+		return True
+	elif selection == 'Remove':
+		confirmation = input('Are you sure? (Y)es or (N)o: ')
+		if confirmation.lower()[0] != 'y':
+			return False
+
+		shutil.rmtree(curriculum_path / curriculum)
+
+		with open(curriculum_table_path, 'r+') as f:
+			lines = map(lambda x: x[:-1], f.readlines())
+
+			f.truncate()
+
+			for line in lines:
+				if line != curriculum:
+					fp.write(line + '\n')
+		return True
+	else:
+		# TODO: Querying functionality
+		return True
 		
 def main_loop():
 	SCAN_OPTION_STRING = 'Scan'
@@ -245,6 +273,10 @@ def main_loop():
 			status = False
 			while not status:
 				status = removing_menu(curriculums)
+		elif current_selection != EXIT_OPTION_STRING:
+			status = False
+			while not status:
+				curriculum_menu(current_selection)
 
 if __name__ == '__main__':
 	if not data_path.exists() or not data_path.is_dir():
