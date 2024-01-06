@@ -65,6 +65,7 @@ def scan_new_curriculums(path):
 	dfs = []
 	for child in files:
 		maybe_df = read_sheet(child)
+
 		if isinstance(maybe_df, dict):
 			for (name, df) in maybe_df.items():
 				if has_right_columns(df):
@@ -72,7 +73,11 @@ def scan_new_curriculums(path):
 		elif maybe_df is None:
 			continue
 		elif has_right_columns(maybe_df):
-			dfs.append((child.name, sanitize(maybe_df)))
+			name = child.name
+			for suffix in child.suffixes:
+				name = name.replace(suffix, '')
+
+			dfs.append((name, sanitize(maybe_df)))
 
 	return dfs		
 
@@ -81,63 +86,93 @@ def embed_string(string, model='text-embedding-ada-002'):
 	return client.embeddings.create(input=text, model=model)
 	
 
-def establish_new_curriculums(named_dfs):
+def establish_new_curriculums(named_dfs, already_used_names=set()):
+	SKIP_OPTION_STRING = "I don't want to use this"
+
 	token_len = lambda x: len(encoding.encode(x))
 	too_many_tokens = lambda df: df.Description.apply(token_len).gt(max_tokens).any()
 	filtered_dfs = filter(lambda p: not too_many_tokens(p[1]), named_dfs)
 
+	options = ['Yes', 'No', SKIP_OPTION_STRING]
 
-	for (name, df) in filtered_dfs: # TODO: Check for duplicates
+	curriculum_table = open(curriculum_table_path, 'a')
+
+	names_used = {name: 1 for name in already_used_names}
+
+	for name, df in filtered_dfs:
 		header = (
 			f'New curriculum "{name}"\n'
+			f'{names_used}'
 			'Would you like to give it a different name?'
 		)	
-		options = ['Yes', 'No']
 
 		selection = print_list_and_query_input(header, options)
-
-		if selection == 1:
+	
+		selected_option = options[selection - 1]
+		if selected_option == SKIP_OPTION_STRING:
+			continue
+		elif selected_option == 'Yes':
 			name = input('New name: ')
+
+			# Get rid of characters that are invalid for filenames
 			name = re.sub('[#%&{}\\<>*?/$!\'":@+`|=]', '', name)
 
-		# TODO: Make directories for them
+		# Disallow duplicate names
+		if names_used.setdefault(name, 0) > 0:
+			new_name = name + f' ({names_used[name]})'
+			while new_name in names_used.keys():
+				names_used[name] += 1
+				new_name = name + f' ({names_used[name]})'
 
+			names_used[name] += 1
+			names_used[new_name] = 0
+			
+			name = new_name
+
+		names_used[name] += 1
+
+		# Make directories for them
+		curriculum_dir = curriculum_path / name
+		curriculum_table.write(name + '\n')
+
+		curriculum_dir.mkdir()
 
 		# TODO: Get embeddings
+		df['embedding'] = df.Description.apply(len)
+
+		df.to_csv(curriculum_dir / 'table.csv')
+
+	curriculum_table.close()
 		
 
 def scan_for_curriculums():
 	if not curriculum_table_path.exists() or not curriculum_table_path.is_file():
 		curriculum_table_path.touch()
 
-	currics = []
-
 	with open(curriculum_table_path, 'r') as file:
-		lines = map(lambda x: x[:-1], file.readlines())
+		currics = list(map(lambda x: x[:-1], file))
 
-		# Chunk the elements by pairs
-		args = [lines] * 2
-		pairs = zip_longest(*args, fillvalue=None)
-
-		# TODO: put into list
-					
 	return currics
 		
 def main_loop():
 	SCAN_OPTION_STRING = 'Scan'
 	EXIT_OPTION_STRING = 'Exit'
-	items = ['bruh', 'two', 'three', SCAN_OPTION_STRING, EXIT_OPTION_STRING]
+	items = [SCAN_OPTION_STRING, EXIT_OPTION_STRING]
 
 	header = 'Chews!'
 
-	selection = 1
-	while items[selection - 1] != EXIT_OPTION_STRING:
+	current_selection = ''
+	while current_selection != EXIT_OPTION_STRING:
 		curriculums = scan_for_curriculums()
-		selection = print_list_and_query_input(header, items)
 		
-		if items[selection - 1] == SCAN_OPTION_STRING:
+		current_items = curriculums + items
+
+		selection_number = print_list_and_query_input(header, current_items)
+		current_selection = current_items[selection_number - 1]
+
+		if current_selection == SCAN_OPTION_STRING:
 			currics = scan_new_curriculums(cwd)
-			establish_new_curriculums(currics)
+			establish_new_curriculums(currics, set(curriculums))
 
 if __name__ == '__main__':
 	if not data_path.exists() or not data_path.is_dir():
