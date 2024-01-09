@@ -32,15 +32,23 @@ def intify(x):
 	except:
 		return -1
 
-def read_sheet(path):
+def read_sheet(path, delete_after=False):
+	if not path.exists():
+		return None
+
 	extension = path.suffix
 
+	df = None
+
 	if extension == '.csv':
-		return pd.read_csv(path)
+		df = pd.read_csv(path)
 	elif extension in {'.xlsx', '.ods'}:
-		return pd.read_excel(path, sheet_name=None)
-	else:
-		return None
+		df = pd.read_excel(path, sheet_name=None)
+
+	if delete_after and df is not None:
+		path.unlink()
+
+	return df
 
 def print_list(header, items, indeces=None):
 	padding = len(str(len(items)))
@@ -69,7 +77,7 @@ def print_list_and_query_input(header, items):
 
 	return user_input
 
-def scan_new_curriculums(path):
+def scan_new_curriculums(path, delete_after=False):
 	has_right_columns = lambda df: 'Description' in df.columns and 'Standard' in df.columns
 	sanitize = lambda df: df[['Standard', 'Description']].dropna()
 
@@ -77,7 +85,7 @@ def scan_new_curriculums(path):
 
 	dfs = []
 	for child in files:
-		maybe_df = read_sheet(child)
+		maybe_df = read_sheet(child, delete_after=delete_after)
 
 		if isinstance(maybe_df, dict):
 			for (name, df) in maybe_df.items():
@@ -253,9 +261,10 @@ def curriculum_menu(curriculum):
 		
 def main_loop():
 	SCAN_OPTION_STRING = 'Scan'
+	SCAN_DELETE_OPTION_STRING = SCAN_OPTION_STRING + ' and Delete after'
 	REMOVE_OPTION_STRING = 'Remove Curriculums'
 	EXIT_OPTION_STRING = 'Exit'
-	items = [SCAN_OPTION_STRING, REMOVE_OPTION_STRING, EXIT_OPTION_STRING]
+	items = [SCAN_OPTION_STRING, SCAN_DELETE_OPTION_STRING, REMOVE_OPTION_STRING, EXIT_OPTION_STRING]
 
 	header = 'Chews!'
 
@@ -268,8 +277,9 @@ def main_loop():
 		selection_number = print_list_and_query_input(header, current_items)
 		current_selection = current_items[selection_number - 1]
 
-		if current_selection == SCAN_OPTION_STRING:
-			currics = scan_new_curriculums(cwd)
+		if current_selection.startswith(SCAN_OPTION_STRING):
+			delete_after = current_selection == SCAN_DELETE_OPTION_STRING
+			currics = scan_new_curriculums(cwd, delete_after=delete_after)
 			establish_new_curriculums(currics, set(curriculums))
 		elif current_selection == REMOVE_OPTION_STRING:
 			status = False
