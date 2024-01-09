@@ -1,5 +1,7 @@
 from ast import literal_eval
 from itertools import zip_longest
+import json
+import numpy as np
 from openai import OpenAI
 import os
 import pandas as pd
@@ -15,10 +17,12 @@ encoding = tiktoken.get_encoding('cl100k_base')
 
 cwd = Path.cwd()
 data_path = cwd / 'data'
+stored_queries_path = data_path / 'queries.json'
 curriculum_table_path = data_path / 'curriculums.txt'
 curriculum_path = data_path / 'currics'
 
 max_tokens = 8000
+stored_queries = {}
 
 def clear():
 	name = os.name
@@ -160,7 +164,7 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
 		curriculum_dir.mkdir()
 
 		# TODO: Get embeddings
-		df['embedding'] = df.Description.apply(len)
+		df['embedding'] = df.Description.apply(lambda x: np.array([len(x)]))
 
 		df.to_csv(curriculum_dir / 'table.csv')
 
@@ -245,17 +249,30 @@ def query_curriculum(curriculum):
 
 	df = pd.read_csv(table_path)
 
-	# TODO: When using real embeddings, uncomment line below
-	# df['embedding'] = df.embedding.apply(literal_eval).apply(np.array)
+	df['embedding'] = df.embedding.apply(literal_eval).apply(np.array)
 
 	# TODO: Ask to save the query under a unique identifier
+	header = 'Would you like to save this query?'
+	options = ['Yes', 'No']
+	selection = options[print_list_and_query_input(header, options) - 1]
+
+	name = None
+	if selection == options[0]:
+		name = input("Enter name: ")
+		while name in stored_queries:
+			print("That name already exists. Try again.")
+			input("Enter name: ")
+
 	query = input("Enter query: ")
 
-	query_embedding = len(query)
+	query_embedding = np.array([len(query)])
 	# TODO: When using real embeddings, remove above line and uncomment line below
 	# query_embedding = embed_string(query)
 
-	df['similarity'] = df.embedding.apply(lambda x: abs(query_embedding - x))
+	if name is not None:
+		stored_queries[name] = {'Description': query, 'Embedding': query_embedding}
+
+	df['similarity'] = df.embedding.apply(lambda x: abs(query_embedding[0] - x[0]))
 	# TODO: When using real embeddings, remove above line and uncomment line below
 	# df['similarity'] = df.embedding.apply(lambda x: distance.cosine(x, query_embedding))
 
@@ -344,11 +361,26 @@ def main_loop():
 			while not status:
 				status = curriculum_menu(current_selection)
 
+def map_queries_embedding(queries, f):
+	return {name: {'Description': queries[name]['Description'], 'Embedding': f(queries[name]['Embedding'])} for name in queries}
+
 if __name__ == '__main__':
 	if not data_path.exists() or not data_path.is_dir():
 		data_path.mkdir()
+	if not stored_queries_path.exists():
+		stored_queries_path.touch()
 	if not curriculum_path.exists() or not curriculum_path.is_dir():
 		curriculum_path.mkdir()
 
+	with open(stored_queries_path, 'r') as f:
+		try:
+			loaded = json.load(f)
+			stored_queries = map_queries_embedding(loaded, np.array)
+		except json.JSONDecodeError:
+			pass
+
 	main_loop()
-	
+
+	with open(stored_queries_path, 'w') as f:
+		dumping = map_queries_embedding(stored_queries, lambda x: x.tolist())
+		json.dump(dumping, f)	
