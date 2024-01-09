@@ -1,9 +1,11 @@
+from ast import literal_eval
 from itertools import zip_longest
 from openai import OpenAI
 import os
 import pandas as pd
 from pathlib import Path
 import re
+from scipy.spatial import distance
 import shutil
 import tiktoken
 
@@ -231,6 +233,59 @@ def removing_menu(curriculums):
 
 	return True
 
+# TODO: list previously used PKs
+def query_curriculum(curriculum):
+	clear()
+
+	table_path = curriculum_path / curriculum / 'table.csv'
+	if not table_path.exists():
+		print("ERROR: Curriculum file couldn't be found.")
+		input("Press Enter to return to main menu...")
+		return True
+
+	df = pd.read_csv(table_path)
+
+	# TODO: When using real embeddings, uncomment line below
+	# df['embedding'] = df.embedding.apply(literal_eval).apply(np.array)
+
+	# TODO: Ask to save the query under a unique identifier
+	query = input("Enter query: ")
+
+	query_embedding = len(query)
+	# TODO: When using real embeddings, remove above line and uncomment line below
+	# query_embedding = embed_string(query)
+
+	df['similarity'] = df.embedding.apply(lambda x: abs(query_embedding - x))
+	# TODO: When using real embeddings, remove above line and uncomment line below
+	# df['similarity'] = df.embedding.apply(lambda x: distance.cosine(x, query_embedding))
+
+	results = df.sort_values('similarity')[["Standard", "Description"]]
+
+	matched_row = None
+
+	for _, row in results.iterrows():
+		header = row["Standard"]
+		header += '\n' + '=' * len(header)
+
+		clear()
+		print(header)
+		print(row["Description"])
+
+		confirmation = input("Is this a good match? (Y)es or (N)o? ")
+
+		if confirmation.lower()[0] == 'y':
+			matched_row = row
+			break
+
+	if matched_row is None:
+		print("It seems like there are no standards in this curriculum that match what you're looking for")
+		input("Press Enter to return to the main menu.\n")
+	else:
+		# TODO: Store and write the match
+		pass	
+
+	return True
+
 def curriculum_menu(curriculum):
 	options = ['Query', 'Remove', 'Back']
 
@@ -256,8 +311,7 @@ def curriculum_menu(curriculum):
 
 		return True
 	else:
-		# TODO: Querying functionality
-		return True
+		return query_curriculum(curriculum)
 		
 def main_loop():
 	SCAN_OPTION_STRING = 'Scan'
