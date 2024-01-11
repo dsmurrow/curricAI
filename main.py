@@ -1,6 +1,5 @@
 from ast import literal_eval
 from enum import Enum
-from itertools import zip_longest
 from math import ceil
 import numpy as np
 from openai import OpenAI
