@@ -72,6 +72,22 @@ def read_sheet(path, delete_after=False):
 
 	return df
 
+def get_mapping_path(curriculum):
+	return curriculum_path / curriculum / 'mappings.csv'
+
+def get_mapping(curriculum):
+	path = get_mapping_path(curriculum)
+	print(path)
+	if not path.exists():
+		path.touch()
+		return pd.DataFrame(columns=['Name', 'Description', 'Standard', 'Standard Description'])
+	else:
+		try:
+			return pd.read_csv(path, index_col=[0])
+		except pd.errors.EmptyDataError:
+			return pd.DataFrame(columns=['Name', 'Description', 'Standard', 'Standard Description'])		
+		
+
 def add_under_header(header, under_header, truncate=False):
     longest_line = max(header.split('\n'), key=len)
 
@@ -139,7 +155,7 @@ def scan_new_curriculums(path, delete_after=False):
 
 def embed_string(string, model='text-embedding-ada-002'):
 	text = string.replace('\n', ' ')
-	return client.embeddings.create(input=text, model=model)
+	return client.embeddings.create(input=text, model=model).data[0].embedding
 	
 
 def establish_new_curriculums(named_dfs, already_used_names=set()):
@@ -329,8 +345,14 @@ def query_curriculum(curriculum):
 		print("It seems like there are no standards in this curriculum that match what you're looking for")
 		input("Press Enter to return to the main menu.\n")
 	else:
-		# TODO: Store and write the match
-		pass	
+		mappings = get_mapping(curriculum)
+		standard = matched_row["Standard"]
+		desc = matched_row["Description"]
+		entry_dict = {"Name": [name], "Description": [query], "Standard": [standard], "Standard Description": [desc]}
+		df = pd.DataFrame(entry_dict)
+		mappings = pd.concat([mappings, df], ignore_index=True)
+		mappings.reset_index()
+		mappings.to_csv(get_mapping_path(curriculum))
 
 	return True
 
@@ -352,8 +374,12 @@ def history_entry(row):
 
 def curriculum_history(curriculum_name, mappings):
 	options = [MenuOption.BACK.value]
+	
+	names = mappings.Name.tolist()
+	standards = mappings.Standard.tolist()
+	prepend = [f'{name} -> {std}' for name, std in zip(names, standards)]
 
-	options = mappings.Name.tolist() + options
+	options = prepend + options
     
 	header = f"Items previously matched to {curriculum_name}"
 
@@ -395,14 +421,9 @@ def curriculum_menu(curriculum):
 		return query_curriculum(curriculum)
 	else:
 		# TODO: Implement history
-		mapping_path = curriculum_path / curriculum / 'mappings.csv'
-		if not mapping_path.exists():
-			mapping_path.touch()
-			mappings = pd.DataFrame(columns=['Name', 'Description', 'Standard', 'Standard Description'])
-		else:
-			mappings = pd.read_csv(mapping_path, index_col=[0])
+		mappings = get_mapping(curriculum)
 
-		return curriculum_history(mappings)
+		return curriculum_history(curriculum, mappings)
 		
 def main_loop():
 	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
