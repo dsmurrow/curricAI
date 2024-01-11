@@ -1,6 +1,7 @@
 from ast import literal_eval
 from enum import Enum
 from itertools import zip_longest
+from math import ceil
 import numpy as np
 from openai import OpenAI
 import os
@@ -10,6 +11,8 @@ import re
 from scipy.spatial import distance
 import shutil
 import tiktoken
+
+UNDER_ALL_HEADERS = '=' * 3
 
 client = OpenAI()
 
@@ -69,7 +72,17 @@ def read_sheet(path, delete_after=False):
 
 	return df
 
-def print_list(header, items, indeces=None):
+def print_list(header, items, indeces=None, under_header=None, truncate_under=False):
+	if under_header is not None:
+		longest_line = max(header.split('\n'), key=len)
+
+		n = ceil(len(longest_line) / len(under_header))
+		under = under_header * n
+		if truncate_under:
+			under = under[:len(header)]
+
+		header += '\n' + under
+
 	padding = len(str(len(items)))
 
 	if indeces is None:
@@ -81,7 +94,7 @@ def print_list(header, items, indeces=None):
 	for i, item in iterator:
 		print(f'{i+1:>{padding}}. {item}')
 
-def print_list_and_query_input(header, items):
+def print_list_and_query_input(header, items, under_header=None, truncate_under=False):
 	max_accepted_input = len(items)
 	is_valid = lambda x: x >= 1 and x <= max_accepted_input
 
@@ -90,7 +103,7 @@ def print_list_and_query_input(header, items):
 	user_input = -1
 	while not is_valid(user_input):
 		clear()
-		print_list(header, items)
+		print_list(header, items, under_header=under_header, truncate_under=truncate_under)
 
 		user_input = intify(input('Choose an option: '))
 
@@ -143,7 +156,7 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
 			'Would you like to give it a different name?'
 		)	
 
-		selection = print_list_and_query_input(header, options)
+		selection = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
 	
 		selected_option = MenuOption(options[selection - 1])
 		if selected_option == MenuOption.SKIP:
@@ -200,7 +213,7 @@ def removing_menu(curriculums):
 	)
 
 	clear()
-	print_list(header, curriculums)
+	print_list(header, curriculums, under_header=UNDER_ALL_HEADERS)
 	selections = input('Selections: ').split()
 
 	if len(selections) == 0:
@@ -223,7 +236,7 @@ def removing_menu(curriculums):
 
 	clear()
 	header = 'Items to be deleted.'
-	print_list(header, [curriculums[i] for i in indeces], indeces=indeces)
+	print_list(header, [curriculums[i] for i in indeces], indeces=indeces, under_header=UNDER_ALL_HEADERS)
 
 	selection = input('Delete these items? (Y)es or (N)o: ')
 	if selection[0].lower() != 'y':
@@ -321,7 +334,7 @@ def query_curriculum(curriculum):
 def curriculum_menu(curriculum):
 	options = [MenuOption.QUERY.value, MenuOption.HISTORY.value, MenuOption.REMOVE.value, MenuOption.BACK.value]
 
-	selected_number = print_list_and_query_input(curriculum, options)
+	selected_number = print_list_and_query_input(curriculum, options, under_header=UNDER_ALL_HEADERS)
 	selection = MenuOption(options[selected_number - 1])
 
 	if selection == MenuOption.BACK:
@@ -350,7 +363,7 @@ def curriculum_menu(curriculum):
 def main_loop():
 	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
 
-	header = 'Chews!'
+	header = 'Please make a selection'
 
 	current_selection = ''
 	while current_selection != MenuOption.EXIT:
@@ -358,7 +371,7 @@ def main_loop():
 		
 		current_items = curriculums + items
 
-		selection_number = print_list_and_query_input(header, current_items)
+		selection_number = print_list_and_query_input(header, current_items, under_header=UNDER_ALL_HEADERS)
 		current_selection = current_items[selection_number - 1]
 		try:
 			current_selection = MenuOption(current_selection)
