@@ -1,4 +1,5 @@
 from ast import literal_eval
+from enum import Enum
 from itertools import zip_longest
 import numpy as np
 from openai import OpenAI
@@ -22,6 +23,19 @@ curriculum_path = data_path / 'currics'
 
 max_tokens = 8000
 stored_queries = pd.DataFrame(columns = ['Name', 'Description', 'Embedding'])
+
+class MenuOption(Enum):
+    YES = 'Yes'
+    NO = 'No'
+    BACK = 'Back'
+    EXIT = 'Exit'
+    REMOVE = 'Remove'
+    HISTORY = 'History'
+    SKIP = 'I don\'t want to use this'
+    SCAN = 'Scan'
+    SCAN_DELETE = 'Scan and Delete after'
+    QUERY = 'Query'
+
 
 def clear():
 	name = os.name
@@ -113,13 +127,11 @@ def embed_string(string, model='text-embedding-ada-002'):
 	
 
 def establish_new_curriculums(named_dfs, already_used_names=set()):
-	SKIP_OPTION_STRING = "I don't want to use this"
-
 	token_len = lambda x: len(encoding.encode(x))
 	too_many_tokens = lambda df: df.Description.apply(token_len).gt(max_tokens).any()
 	filtered_dfs = filter(lambda p: not too_many_tokens(p[1]), named_dfs)
 
-	options = ['Yes', 'No', SKIP_OPTION_STRING]
+	options = [MenuOption.YES.value, MenuOption.NO.value, MenuOption.SKIP.value]
 
 	curriculum_table = open(curriculum_table_path, 'a')
 
@@ -133,10 +145,10 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
 
 		selection = print_list_and_query_input(header, options)
 	
-		selected_option = options[selection - 1]
-		if selected_option == SKIP_OPTION_STRING:
+		selected_option = MenuOption(options[selection - 1])
+		if selected_option == MenuOption.SKIP:
 			continue
-		elif selected_option == 'Yes':
+		elif selected_option == MenuOption.YES:
 			name = input('New name: ')
 
 			# Get rid of characters that are invalid for filenames
@@ -251,11 +263,11 @@ def query_curriculum(curriculum):
 	df['embedding'] = df.embedding.apply(literal_eval).apply(np.array)
 
 	header = 'Would you like to save this query?'
-	options = ['Yes', 'No']
+	options = [MenuOption.YES.value, MenuOption.NO.value]
 	selection = options[print_list_and_query_input(header, options) - 1]
 
 	name = None
-	if selection == options[0]:
+	if selection == MenuOption.YES.value:
 		name = input("Enter name: ")
 		while name in stored_queries["Name"].values:
 			print("That name already exists. Try again.")
@@ -307,14 +319,14 @@ def query_curriculum(curriculum):
 	return True
 
 def curriculum_menu(curriculum):
-	options = ['Query', 'Remove', 'Back']
+	options = [MenuOption.QUERY.value, MenuOption.HISTORY.value, MenuOption.REMOVE.value, MenuOption.BACK.value]
 
 	selected_number = print_list_and_query_input(curriculum, options)
-	selection = options[selected_number - 1]
+	selection = MenuOption(options[selected_number - 1])
 
-	if selection == 'Back':
+	if selection == MenuOption.BACK:
 		return True
-	elif selection == 'Remove':
+	elif selection == MenuOption.REMOVE:
 		confirmation = input('Are you sure? (Y)es or (N)o: ')
 		if confirmation[0].lower() != 'y':
 			return False
@@ -329,36 +341,37 @@ def curriculum_menu(curriculum):
 				f.write(line + '\n')
 
 		return True
-	else:
+	elif selection == MenuOption.QUERY:
 		return query_curriculum(curriculum)
+	else:
+		# TODO: Implement history
+		return True
 		
 def main_loop():
-	SCAN_OPTION_STRING = 'Scan'
-	SCAN_DELETE_OPTION_STRING = SCAN_OPTION_STRING + ' and Delete after'
-	REMOVE_OPTION_STRING = 'Remove Curriculums'
-	EXIT_OPTION_STRING = 'Exit'
-	items = [SCAN_OPTION_STRING, SCAN_DELETE_OPTION_STRING, REMOVE_OPTION_STRING, EXIT_OPTION_STRING]
+	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
 
 	header = 'Chews!'
 
 	current_selection = ''
-	while current_selection != EXIT_OPTION_STRING:
+	while current_selection != MenuOption.EXIT:
 		curriculums = scan_for_curriculums()
 		
 		current_items = curriculums + items
 
 		selection_number = print_list_and_query_input(header, current_items)
 		current_selection = current_items[selection_number - 1]
+		try:
+			current_selection = MenuOption(current_selection)
 
-		if current_selection.startswith(SCAN_OPTION_STRING):
-			delete_after = current_selection == SCAN_DELETE_OPTION_STRING
-			currics = scan_new_curriculums(cwd, delete_after=delete_after)
-			establish_new_curriculums(currics, set(curriculums))
-		elif current_selection == REMOVE_OPTION_STRING:
-			status = False
-			while not status:
-				status = removing_menu(curriculums)
-		elif current_selection != EXIT_OPTION_STRING:
+			if current_selection in {MenuOption.SCAN, MenuOption.SCAN_DELETE}:
+				delete_after = current_selection == MenuOption.SCAN_DELETE
+				currics = scan_new_curriculums(cwd, delete_after=delete_after)
+				establish_new_curriculums(currics, set(curriculums))
+			elif current_selection == MenuOption.REMOVE:
+				status = False
+				while not status:
+					status = removing_menu(curriculums)
+		except ValueError:
 			status = False
 			while not status:
 				status = curriculum_menu(current_selection)
