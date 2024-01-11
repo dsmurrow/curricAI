@@ -1,6 +1,5 @@
 from ast import literal_eval
 from itertools import zip_longest
-import json
 import numpy as np
 from openai import OpenAI
 import os
@@ -17,12 +16,12 @@ encoding = tiktoken.get_encoding('cl100k_base')
 
 cwd = Path.cwd()
 data_path = cwd / 'data'
-stored_queries_path = data_path / 'queries.json'
+stored_queries_path = data_path / 'queries.csv'
 curriculum_table_path = data_path / 'curriculums.txt'
 curriculum_path = data_path / 'currics'
 
 max_tokens = 8000
-stored_queries = {}
+stored_queries = pd.DataFrame(columns = ['Name', 'Description', 'Embedding'])
 
 def clear():
 	name = os.name
@@ -164,7 +163,7 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
 		curriculum_dir.mkdir()
 
 		# TODO: Get embeddings
-		df['embedding'] = df.Description.apply(lambda x: np.array([len(x)]))
+		df['embedding'] = df.Description.apply(lambda x: [len(x), -len(x)])
 
 		df.to_csv(curriculum_dir / 'table.csv')
 
@@ -239,6 +238,8 @@ def removing_menu(curriculums):
 
 # TODO: list previously used PKs
 def query_curriculum(curriculum):
+	global stored_queries
+
 	clear()
 
 	table_path = curriculum_path / curriculum / 'table.csv'
@@ -259,18 +260,24 @@ def query_curriculum(curriculum):
 	name = None
 	if selection == options[0]:
 		name = input("Enter name: ")
-		while name in stored_queries:
+		while name in stored_queries.Name:
 			print("That name already exists. Try again.")
 			input("Enter name: ")
 
 	query = input("Enter query: ")
 
-	query_embedding = np.array([len(query)])
+	query_embedding = np.array([len(query), -len(query)])
 	# TODO: When using real embeddings, remove above line and uncomment line below
 	# query_embedding = embed_string(query)
 
 	if name is not None:
-		stored_queries[name] = {'Description': query, 'Embedding': query_embedding}
+		df2_dict = {'Name': name, 'Description': query}
+		df2 = pd.DataFrame(df2_dict)
+		df2['Embedding'] = query_embedding
+		print(df2)
+		input()
+		stored_queries = pd.concat([stored_queries, df2], ignore_index=True)
+		stored_queries.reset_index()
 
 	df['similarity'] = df.embedding.apply(lambda x: abs(query_embedding[0] - x[0]))
 	# TODO: When using real embeddings, remove above line and uncomment line below
@@ -372,15 +379,13 @@ if __name__ == '__main__':
 	if not curriculum_path.exists() or not curriculum_path.is_dir():
 		curriculum_path.mkdir()
 
-	with open(stored_queries_path, 'r') as f:
-		try:
-			loaded = json.load(f)
-			stored_queries = map_queries_embedding(loaded, np.array)
-		except json.JSONDecodeError:
-			pass
+	try:
+		stored_queries = pd.read_csv(stored_queries_path)
+		stored_queries['Embedding'] = stored_queries.Embedding.apply(np.array)
+	except pd.errors.EmptyDataError:
+		pass
 
 	main_loop()
 
-	with open(stored_queries_path, 'w') as f:
-		dumping = map_queries_embedding(stored_queries, lambda x: x.tolist())
-		json.dump(dumping, f)	
+	stored_queries.to_csv(stored_queries_path)
+
