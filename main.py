@@ -191,7 +191,7 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
 		curriculum_dir.mkdir()
 
 		# TODO: Get embeddings
-		df['embedding'] = df.Description.apply(lambda x: [len(x), -len(x)])
+		df['embedding'] = df.Description.apply(embed_string)
 
 		df.to_csv(curriculum_dir / 'table.csv')
 
@@ -351,22 +351,22 @@ def history_entry(row):
 		return True
 
 def curriculum_history(curriculum_name, mappings):
-    options = [MenuOption.BACK.value]
+	options = [MenuOption.BACK.value]
 
-    options = mappings.Name.tolist() + options
+	options = mappings.Name.tolist() + options
     
-    header = f"Items previously matched to {curriculum_name}"
+	header = f"Items previously matched to {curriculum_name}"
 
-    selection = MenuOption.NONE
-    while selection != MenuOption.BACK:
-        try:
-            selected_number = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
-            selection = MenuOption(options[selected_number - 1])
-        except ValueError:
-            selection = MenuOption.NONE
-            history_entry(mappings.iloc[selected_number - 1])
+	selection = MenuOption.NONE
+	while selection != MenuOption.BACK:
+		try:
+			selected_number = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
+			selection = MenuOption(options[selected_number - 1])
+		except ValueError:
+			selection = MenuOption.NONE
+			history_entry(mappings.iloc[selected_number - 1])
 
-    return True
+	return True
 
 def curriculum_menu(curriculum):
 	options = [MenuOption.QUERY.value, MenuOption.HISTORY.value, MenuOption.REMOVE.value, MenuOption.BACK.value]
