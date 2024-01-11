@@ -224,8 +224,6 @@ def removing_menu(curriculums):
 
 		curriculum_dir = curriculum_path / name
 
-		print(f'deleting {curriculum_dir}')
-		assert(curriculum_dir.exists() and curriculum_dir.is_dir())
 		shutil.rmtree(curriculum_dir)
 
 		del curriculums[i]
@@ -248,11 +246,10 @@ def query_curriculum(curriculum):
 		input("Press Enter to return to main menu...")
 		return True
 
-	df = pd.read_csv(table_path)
+	df = pd.read_csv(table_path, index_col=[0])
 
 	df['embedding'] = df.embedding.apply(literal_eval).apply(np.array)
 
-	# TODO: Ask to save the query under a unique identifier
 	header = 'Would you like to save this query?'
 	options = ['Yes', 'No']
 	selection = options[print_list_and_query_input(header, options) - 1]
@@ -260,24 +257,23 @@ def query_curriculum(curriculum):
 	name = None
 	if selection == options[0]:
 		name = input("Enter name: ")
-		while name in stored_queries.Name:
+		while name in stored_queries["Name"].values:
 			print("That name already exists. Try again.")
-			input("Enter name: ")
+			name = input("Enter name: ")
 
 	query = input("Enter query: ")
 
-	query_embedding = np.array([len(query), -len(query)])
+	query_embedding = [len(query), -len(query)]
 	# TODO: When using real embeddings, remove above line and uncomment line below
 	# query_embedding = embed_string(query)
 
 	if name is not None:
-		df2_dict = {'Name': name, 'Description': query}
-		df2 = pd.DataFrame(df2_dict)
-		df2['Embedding'] = query_embedding
-		print(df2)
-		input()
+		df2_dict = {'Name': [name], 'Description': [query], 'Embedding': [query_embedding]}
+		df2 = pd.DataFrame.from_dict(df2_dict)
 		stored_queries = pd.concat([stored_queries, df2], ignore_index=True)
 		stored_queries.reset_index()
+
+	query_embedding = np.array(query_embedding)
 
 	df['similarity'] = df.embedding.apply(lambda x: abs(query_embedding[0] - x[0]))
 	# TODO: When using real embeddings, remove above line and uncomment line below
@@ -323,7 +319,6 @@ def curriculum_menu(curriculum):
 		if confirmation[0].lower() != 'y':
 			return False
 
-		print(bytes(curriculum, 'utf8'))
 		shutil.rmtree(curriculum_path / curriculum)
 
 		with open(curriculum_table_path, 'r') as f:
@@ -380,7 +375,7 @@ if __name__ == '__main__':
 		curriculum_path.mkdir()
 
 	try:
-		stored_queries = pd.read_csv(stored_queries_path)
+		stored_queries = pd.read_csv(stored_queries_path, index_col=[0])
 		stored_queries['Embedding'] = stored_queries.Embedding.apply(np.array)
 	except pd.errors.EmptyDataError:
 		pass
