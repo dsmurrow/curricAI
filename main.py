@@ -37,6 +37,7 @@ class MenuOption(Enum):
     SCAN = 'Scan'
     SCAN_DELETE = 'Scan and Delete after'
     QUERY = 'Query'
+    NONE = ''
 
 
 def clear():
@@ -71,16 +72,19 @@ def read_sheet(path, delete_after=False):
 
 	return df
 
+def add_under_header(header, under_header, truncate=False):
+    longest_line = max(header.split('\n'), key=len)
+
+    n = ceil(len(longest_line) / len(under_header))
+    under = under_header * n
+    if truncate:
+        under = under[:len(longest_line)]
+
+    return header + '\n' + under
+
 def print_list(header, items, indeces=None, under_header=None, truncate_under=False):
 	if under_header is not None:
-		longest_line = max(header.split('\n'), key=len)
-
-		n = ceil(len(longest_line) / len(under_header))
-		under = under_header * n
-		if truncate_under:
-			under = under[:len(header)]
-
-		header += '\n' + under
+		header = add_under_header(header, under_header=under_header, truncate=truncate_under)
 
 	padding = len(str(len(items)))
 
@@ -330,6 +334,40 @@ def query_curriculum(curriculum):
 
 	return True
 
+def history_entry(row):
+	# TODO: Edit entry
+	options = [MenuOption.BACK.value]
+
+	name_header = row['Name']
+	name_header = add_under_header(name_header, UNDER_ALL_HEADERS)
+
+	standard_header = row['Standard']
+	standard_header = add_under_header(standard_header, UNDER_ALL_HEADERS)
+
+	header = f'{name_header}\n{row["Description"]}\n\n{standard_header}\n{row["Standard Description"]}'
+	selection_number = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
+
+	if MenuOption(options[selection_number - 1]) == MenuOption.BACK.value:
+		return True
+
+def curriculum_history(curriculum_name, mappings):
+    options = [MenuOption.BACK.value]
+
+    options = mappings.Name.tolist() + options
+    
+    header = f"Items previously matched to {curriculum_name}"
+
+    selection = MenuOption.NONE
+    while selection != MenuOption.BACK:
+        try:
+            selected_number = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
+            selection = MenuOption(options[selected_number - 1])
+        except ValueError:
+            selection = MenuOption.NONE
+            history_entry(mappings.iloc[selected_number - 1])
+
+    return True
+
 def curriculum_menu(curriculum):
 	options = [MenuOption.QUERY.value, MenuOption.HISTORY.value, MenuOption.REMOVE.value, MenuOption.BACK.value]
 
@@ -357,7 +395,14 @@ def curriculum_menu(curriculum):
 		return query_curriculum(curriculum)
 	else:
 		# TODO: Implement history
-		return True
+		mapping_path = curriculum_path / curriculum / 'mappings.csv'
+		if not mapping_path.exists():
+			mapping_path.touch()
+			mappings = pd.DataFrame(columns=['Name', 'Description', 'Standard', 'Standard Description'])
+		else:
+			mappings = pd.read_csv(mapping_path, index_col=[0])
+
+		return curriculum_history(mappings)
 		
 def main_loop():
 	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
