@@ -31,6 +31,7 @@ class MenuOption(Enum):
     NO = 'No'
     BACK = 'Back'
     EXIT = 'Exit'
+    EDIT = 'Edit'
     REMOVE = 'Remove'
     HISTORY = 'History'
     SKIP = 'I don\'t want to use this'
@@ -278,6 +279,12 @@ def removing_menu(curriculums):
 
 	return True
 
+def query_ranking(df, query_embedding):
+	df = df.copy()
+	df['similarity'] = df.embedding.apply(lambda x: distance.cosine(x, query_embedding))
+	df.sort_values('similarity', inplace=True)
+	return df[["Standard", "Description"]]
+
 # TODO: list previously used PKs
 def query_curriculum(curriculum):
 	global stored_queries
@@ -317,9 +324,7 @@ def query_curriculum(curriculum):
 
 	query_embedding = np.array(query_embedding)
 
-	df['similarity'] = df.embedding.apply(lambda x: distance.cosine(x, query_embedding))
-
-	results = df.sort_values('similarity')[["Standard", "Description"]]
+	results = query_ranking(df, query_embedding)
 
 	matched_row = None
 
@@ -354,7 +359,7 @@ def query_curriculum(curriculum):
 
 def history_entry(row):
 	# TODO: Edit entry
-	options = [MenuOption.BACK.value]
+	options = [MenuOption.EDIT.value, MenuOption.BACK.value]
 
 	name_header = row['Name']
 	name_header = add_under_header(name_header, UNDER_ALL_HEADERS)
@@ -367,6 +372,8 @@ def history_entry(row):
 
 	if MenuOption(options[selection_number - 1]) == MenuOption.BACK.value:
 		return True
+	elif MenuOption(options[selection_number - 1]) == MenuOption.EDIT.value:
+		pass
 
 def curriculum_history(curriculum_name, mappings):
 	options = [MenuOption.BACK.value]
