@@ -282,11 +282,14 @@ def removing_menu(curriculums):
 
 	return True
 
-def query_ranking(df, query_embedding):
+def query_ranking(df, query_embedding, include_similarity=False):
 	df = df.copy()
 	df['similarity'] = df.embedding.apply(lambda x: distance.cosine(x, query_embedding))
 	df.sort_values('similarity', inplace=True)
-	return df[["Standard", "Description"]]
+	if include_similarity:
+		return df[["Standard", "Description", "similarity"]]
+	else:
+		return df[["Standard", "Description"]]
 
 def query_curriculum(curriculum):
 	global stored_queries
@@ -326,22 +329,27 @@ def query_curriculum(curriculum):
 
 	query_embedding = np.array(query_embedding)
 
-	results = query_ranking(df, query_embedding)
+	results = query_ranking(df, query_embedding, include_similarity=True)
 
 	matched_row = None
 
 	for _, row in results.iterrows():
-		header = row["Standard"]
-		header += '\n' + '=' * len(header)
+		standard_header = f'{row["Standard"]} ({row["similarity"]})'
+		standard_header = add_under_header(standard_header, UNDER_ALL_HEADERS)
 
-		clear()
-		print(header)
-		print(row["Description"])
+		desc_header = row["Description"]
+		desc_header = add_under_header(desc_header, UNDER_ALL_HEADERS)
 
-		confirmation = input("Is this a good match? (Y)es or (N)o? ")
+		header = f'{standard_header}\n{desc_header}\nIs this a good match?'
 
-		if confirmation.lower()[0] == 'y':
+		options = [MenuOption.YES.value, MenuOption.NO.value, MenuOption.EXIT.value]
+
+		selected_number = print_list_and_query_input(header, options)
+
+		if options[selected_number - 1] == MenuOption.YES.value:
 			matched_row = row
+			break
+		elif options[selected_number - 1] == MenuOption.EXIT.value:
 			break
 
 	if matched_row is None:
@@ -461,7 +469,7 @@ def swap_menu():
 		return False
 
 def main_loop():
-	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.REARRANGE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
+	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.HISTORY.value, MenuOption.REARRANGE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
 
 	header = 'Please make a selection'
 
