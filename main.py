@@ -34,6 +34,7 @@ class MenuOption(Enum):
     EDIT = 'Edit'
     REMOVE = 'Remove'
     HISTORY = 'History'
+    SAVED = 'Saved'
     SKIP = 'I don\'t want to use this'
     SCAN = 'Scan'
     SCAN_DELETE = 'Scan and Delete after'
@@ -291,6 +292,39 @@ def query_ranking(df, query_embedding, include_similarity=False):
 	else:
 		return df[["Standard", "Description"]]
 
+def present_ranking(df):
+	matched_row = None
+
+	for _, row in df.iterrows():
+		standard_header = f'{row["Standard"]} ({row["similarity"]})'
+		standard_header = add_under_header(standard_header, UNDER_ALL_HEADERS)
+
+		desc_header = row["Description"]
+		desc_header = add_under_header(desc_header, UNDER_ALL_HEADERS)
+
+		header = f'{standard_header}\n{desc_header}\nIs this a good match?'
+
+		options = [MenuOption.YES.value, MenuOption.NO.value, MenuOption.EXIT.value]
+
+		selected_number = print_list_and_query_input(header, options)
+
+		if options[selected_number - 1] == MenuOption.YES.value:
+			matched_row = row
+			break
+		elif options[selected_number - 1] == MenuOption.EXIT.value:
+			break
+
+	return matched_row
+
+def save_mapping(curriculum, mappings, name, desc, std, std_desc):
+	entry_dict = {'Name': [name], 'Description': [desc], 'Standard': [std], 'Standard Description': [std_desc]}
+
+	df = pd.DataFrame(entry_dict)
+
+	mappings = pd.concat([mappings, df], ignore_index=True)
+	mappings.reset_index()
+	mappings.to_csv(get_mapping_path(curriculum))
+
 def query_curriculum(curriculum):
 	global stored_queries
 
@@ -331,26 +365,7 @@ def query_curriculum(curriculum):
 
 	results = query_ranking(df, query_embedding, include_similarity=True)
 
-	matched_row = None
-
-	for _, row in results.iterrows():
-		standard_header = f'{row["Standard"]} ({row["similarity"]})'
-		standard_header = add_under_header(standard_header, UNDER_ALL_HEADERS)
-
-		desc_header = row["Description"]
-		desc_header = add_under_header(desc_header, UNDER_ALL_HEADERS)
-
-		header = f'{standard_header}\n{desc_header}\nIs this a good match?'
-
-		options = [MenuOption.YES.value, MenuOption.NO.value, MenuOption.EXIT.value]
-
-		selected_number = print_list_and_query_input(header, options)
-
-		if options[selected_number - 1] == MenuOption.YES.value:
-			matched_row = row
-			break
-		elif options[selected_number - 1] == MenuOption.EXIT.value:
-			break
+	matched_row = present_ranking(results)
 
 	if matched_row is None:
 		print("It seems like there are no standards in this curriculum that match what you're looking for")
@@ -358,15 +373,7 @@ def query_curriculum(curriculum):
 	else:
 		mappings = get_mapping(curriculum)
 
-		standard = matched_row["Standard"]
-		desc = matched_row["Description"]
-		entry_dict = {"Name": [name], "Description": [query], "Standard": [standard], "Standard Description": [desc]}
-
-		df = pd.DataFrame(entry_dict)
-
-		mappings = pd.concat([mappings, df], ignore_index=True)
-		mappings.reset_index()
-		mappings.to_csv(get_mapping_path(curriculum))
+		save_mapping(curriculum, mappings, name, query, matched_row["Standard"], matched_row["Description"])
 
 	return True
 
@@ -468,8 +475,99 @@ def swap_menu():
 	except ValueError:
 		return False
 
+def saved_query_new_query_menu(entry):
+	curriculums = scan_for_curriculums()
+
+	options = [MenuOption.BACK.value]
+
+	options = curriculums + options
+
+	selection_number = print_list_and_query_input(f'Choose curriculum', options, under_header=UNDER_ALL_HEADERS)
+	
+	# TODO: Make enum values illegal names
+	try:
+		selection = MenuOption(options[selection_number - 1])
+		if selection == MenuOption.BACK:
+			return True
+	except ValueError:
+		chosen_curriculum = curriculums[selection_number - 1]
+
+		mappings = get_mapping(chosen_curriculum)
+
+		if entry["Name"] in mappings["Name"].values:
+			matching_index = mappings.index[mappings["Name"] == entry["Name"]].tolist()[0]
+			mapping_entry = mappings.loc[matching_index]
+
+			header = f'There is already a mapping for {entry["Name"]} in {chosen_curriculum}.\n\n'
+			
+			header += add_under_header(mapping_entry["Standard"], UNDER_ALL_HEADERS)
+
+			standard_desc = mapping_entry["Standard Description"]
+			standard_desc = add_under_header(standard_desc, UNDER_ALL_HEADERS)
+
+			header = f'{header}\n{standard_desc}\nWould you like to change it?'
+
+			options = [MenuOption.YES.value, MenuOption.NO.value]
+
+			selection_number = print_list_and_query_input(header, options)
+
+			if MenuOption(options[selection_number - 1]) == MenuOption.NO:
+				return False
+
+			mappings.drop(matching_index)
+
+		curriculum_table = pd.read_csv(curriculum_path / chosen_curriculum / 'table.csv', index_col=[0])
+		curriculum_table["embedding"] = curriculum_table.embedding.apply(literal_eval).apply(np.array)
+
+		embedding = np.array(literal_eval(entry["Embedding"]))
+		print(embedding)
+		input()
+		ranking = query_ranking(curriculum_table, embedding, include_similarity=True)
+
+		matching_row = present_ranking(ranking)
+
+		if matching_row is not None:
+			save_mapping(chosen_curriculum, mappings, entry["Name"], entry["Description"], matching_row["Standard"], matching_row["Description"])
+			return True
+
+		return True
+
+
+def saved_query_menu(entry):
+	# TODO: Option to see previous mappings
+	options = [MenuOption.QUERY.value, MenuOption.BACK.value]
+
+	selection_number = print_list_and_query_input(entry["Name"], options, under_header=UNDER_ALL_HEADERS)
+
+	selection = MenuOption(options[selection_number - 1])
+
+	if selection == MenuOption.BACK:
+		return True
+	else:
+		status = False
+		while not status:
+			status = saved_query_new_query_menu(entry)
+		return False
+
+def saved_menu():
+	options = [MenuOption.BACK.value]
+
+	options = stored_queries.Name.tolist() + options
+
+	selection_number = print_list_and_query_input('Saved', options, under_header=UNDER_ALL_HEADERS)
+
+	try:
+		selection = MenuOption(options[selection_number - 1])
+		if selection == MenuOption.BACK:
+			return True
+	except ValueError:
+		row = stored_queries.iloc[selection_number- 1]
+		status = False
+		while not status:
+			status = saved_query_menu(row)
+
 def main_loop():
-	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.HISTORY.value, MenuOption.REARRANGE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
+	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.SAVED.value, MenuOption.REARRANGE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
 
 	header = 'Please make a selection'
 
@@ -496,6 +594,10 @@ def main_loop():
 				status = False
 				while not status:
 					status = swap_menu()
+			elif current_selection == MenuOption.SAVED:
+				status = False
+				while not status:
+					status = saved_menu()
 		except ValueError:
 			status = False
 			while not status:
