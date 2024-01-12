@@ -97,6 +97,8 @@ def add_under_header(header, under_header, truncate=False):
     if truncate:
         under = under[:len(longest_line)]
 
+    under = under[:os.get_terminal_size().columns]
+
     return header + '\n' + under
 
 def print_list(header, items, indeces=None, under_header=None, truncate_under=False):
@@ -423,7 +425,6 @@ def curriculum_menu(curriculum):
 	elif selection == MenuOption.QUERY:
 		return query_curriculum(curriculum)
 	else:
-		# TODO: Implement history
 		mappings = get_mapping(curriculum)
 
 		return curriculum_history(curriculum, mappings)
