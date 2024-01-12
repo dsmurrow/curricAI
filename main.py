@@ -307,9 +307,7 @@ def query_curriculum(curriculum):
 
 	query = input("Enter query: ")
 
-	query_embedding = [len(query), -len(query)]
-	# TODO: When using real embeddings, remove above line and uncomment line below
-	# query_embedding = embed_string(query)
+	query_embedding = embed_string(query)
 
 	if name is not None:
 		df2_dict = {'Name': [name], 'Description': [query], 'Embedding': [query_embedding]}
@@ -319,9 +317,7 @@ def query_curriculum(curriculum):
 
 	query_embedding = np.array(query_embedding)
 
-	df['similarity'] = df.embedding.apply(lambda x: abs(query_embedding[0] - x[0]))
-	# TODO: When using real embeddings, remove above line and uncomment line below
-	# df['similarity'] = df.embedding.apply(lambda x: distance.cosine(x, query_embedding))
+	df['similarity'] = df.embedding.apply(lambda x: distance.cosine(x, query_embedding))
 
 	results = df.sort_values('similarity')[["Standard", "Description"]]
 
