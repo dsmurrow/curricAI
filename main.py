@@ -27,20 +27,26 @@ max_tokens = 8000
 stored_queries = pd.DataFrame(columns = ['Name', 'Description', 'Embedding'])
 
 class MenuOption(Enum):
-    YES = 'Yes'
-    NO = 'No'
-    BACK = 'Back'
-    EXIT = 'Exit'
-    EDIT = 'Edit'
-    REMOVE = 'Remove'
-    HISTORY = 'History'
-    SAVED = 'Saved'
-    SKIP = 'I don\'t want to use this'
-    SCAN = 'Scan'
-    SCAN_DELETE = 'Scan and Delete after'
-    QUERY = 'Query'
-    REARRANGE = 'Rearrange'
-    NONE = ''
+	YES = 'Yes'
+	NO = 'No'
+	BACK = 'Back'
+	EXIT = 'Exit'
+	EDIT = 'Edit'
+	REMOVE = 'Remove'
+	HISTORY = 'History'
+	SAVED = 'Saved'
+	SKIP = 'I don\'t want to use this'
+	SCAN = 'Scan'
+	SCAN_DELETE = 'Scan and Delete after'
+	QUERY = 'Query'
+	REARRANGE = 'Rearrange'
+
+	@classmethod
+	def from_value(cls, value):
+		try:
+			return cls(value)
+		except ValueError:
+			return None
 
 
 def clear():
@@ -406,13 +412,12 @@ def curriculum_history(curriculum_name, mappings):
     
 	header = f"Items previously matched to {curriculum_name}"
 
-	selection = MenuOption.NONE
+	selection = None
 	while selection != MenuOption.BACK:
-		try:
-			selected_number = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
-			selection = MenuOption(options[selected_number - 1])
-		except ValueError:
-			selection = MenuOption.NONE
+		selected_number = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
+		selection = MenuOption.from_value(options[selected_number - 1])
+
+		if selection is None:
 			history_entry(mappings.iloc[selected_number - 1])
 
 	return True
@@ -485,11 +490,10 @@ def saved_query_new_query_menu(entry):
 	selection_number = print_list_and_query_input(f'Choose curriculum', options, under_header=UNDER_ALL_HEADERS)
 	
 	# TODO: Make enum values illegal names
-	try:
-		selection = MenuOption(options[selection_number - 1])
-		if selection == MenuOption.BACK:
-			return True
-	except ValueError:
+	selection = MenuOption.from_value(options[selection_number - 1])
+	if selection == MenuOption.BACK:
+		return True
+	else:
 		chosen_curriculum = curriculums[selection_number - 1]
 
 		mappings = get_mapping(chosen_curriculum)
@@ -520,8 +524,6 @@ def saved_query_new_query_menu(entry):
 		curriculum_table["embedding"] = curriculum_table.embedding.apply(literal_eval).apply(np.array)
 
 		embedding = np.array(literal_eval(entry["Embedding"]))
-		print(embedding)
-		input()
 		ranking = query_ranking(curriculum_table, embedding, include_similarity=True)
 
 		matching_row = present_ranking(ranking)
@@ -555,12 +557,11 @@ def saved_menu():
 	options = stored_queries.Name.tolist() + options
 
 	selection_number = print_list_and_query_input('Saved', options, under_header=UNDER_ALL_HEADERS)
+	selection = MenuOption.from_value(options[selection_number - 1])
 
-	try:
-		selection = MenuOption(options[selection_number - 1])
-		if selection == MenuOption.BACK:
-			return True
-	except ValueError:
+	if selection == MenuOption.BACK:
+		return True
+	else:
 		row = stored_queries.iloc[selection_number- 1]
 		status = False
 		while not status:
@@ -571,34 +572,33 @@ def main_loop():
 
 	header = 'Please make a selection'
 
-	current_selection = MenuOption.NONE
+	current_selection = None
 	while current_selection != MenuOption.EXIT:
 		curriculums = scan_for_curriculums()
 		
 		current_items = curriculums + items
 
 		selection_number = print_list_and_query_input(header, current_items, under_header=UNDER_ALL_HEADERS)
-		current_selection = current_items[selection_number - 1]
-		try:
-			current_selection = MenuOption(current_selection)
+		current_selection = MenuOption.from_value(current_items[selection_number - 1])
 
-			if current_selection in {MenuOption.SCAN, MenuOption.SCAN_DELETE}:
-				delete_after = current_selection == MenuOption.SCAN_DELETE
-				currics = scan_new_curriculums(cwd, delete_after=delete_after)
-				establish_new_curriculums(currics, set(curriculums))
-			elif current_selection == MenuOption.REMOVE:
-				status = False
-				while not status:
-					status = removing_menu(curriculums)
-			elif current_selection == MenuOption.REARRANGE:
-				status = False
-				while not status:
-					status = swap_menu()
-			elif current_selection == MenuOption.SAVED:
-				status = False
-				while not status:
-					status = saved_menu()
-		except ValueError:
+		if current_selection in {MenuOption.SCAN, MenuOption.SCAN_DELETE}:
+			delete_after = current_selection == MenuOption.SCAN_DELETE
+			currics = scan_new_curriculums(cwd, delete_after=delete_after)
+			establish_new_curriculums(currics, set(curriculums))
+		elif current_selection == MenuOption.REMOVE:
+			status = False
+			while not status:
+				status = removing_menu(curriculums)
+		elif current_selection == MenuOption.REARRANGE:
+			status = False
+			while not status:
+				status = swap_menu()
+		elif current_selection == MenuOption.SAVED:
+			status = False
+			while not status:
+				status = saved_menu()
+		elif current_selection is None:
+			current_selection = current_items[selection_number - 1]
 			status = False
 			while not status:
 				status = curriculum_menu(current_selection)
