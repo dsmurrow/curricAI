@@ -81,6 +81,17 @@ def read_sheet(path, delete_after=False):
 
 	return df
 
+def get_curriculum_table_path(curriculum):
+	return curriculum_path / curriculum / 'table.csv'
+
+def get_curriculum_table(curriculum):
+	path = get_curriculum_table_path(curriculum)
+
+	table = pd.read_csv(path, index_col=[0])
+	table['embedding'] = table.embedding.apply(literal_eval).apply(np.array)
+
+	return table
+
 def get_mapping_path(curriculum):
 	return curriculum_path / curriculum / 'mappings.csv'
 
@@ -336,15 +347,7 @@ def query_curriculum(curriculum):
 
 	clear()
 
-	table_path = curriculum_path / curriculum / 'table.csv'
-	if not table_path.exists():
-		print("ERROR: Curriculum file couldn't be found.")
-		input("Press Enter to return to main menu...")
-		return True
-
-	df = pd.read_csv(table_path, index_col=[0])
-
-	df['embedding'] = df.embedding.apply(literal_eval).apply(np.array)
+	df = get_curriculum_table(curriculum)
 
 	header = 'Would you like to save this query?'
 	options = [MenuOption.YES.value, MenuOption.NO.value]
@@ -520,8 +523,7 @@ def saved_query_new_query_menu(entry):
 
 			mappings.drop(matching_index)
 
-		curriculum_table = pd.read_csv(curriculum_path / chosen_curriculum / 'table.csv', index_col=[0])
-		curriculum_table["embedding"] = curriculum_table.embedding.apply(literal_eval).apply(np.array)
+		curriculum_table = get_curriculum_table(chosen_curriculum)
 
 		embedding = np.array(literal_eval(entry["Embedding"]))
 		ranking = query_ranking(curriculum_table, embedding, include_similarity=True)
