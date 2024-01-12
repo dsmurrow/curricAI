@@ -38,6 +38,7 @@ class MenuOption(Enum):
     SCAN = 'Scan'
     SCAN_DELETE = 'Scan and Delete after'
     QUERY = 'Query'
+    REARRANGE = 'Rearrange'
     NONE = ''
 
 
@@ -428,13 +429,41 @@ def curriculum_menu(curriculum):
 		mappings = get_mapping(curriculum)
 
 		return curriculum_history(curriculum, mappings)
-		
+
+def swap_menu():
+	curriculums = scan_for_curriculums()
+	header = (
+			"Type in the numbers of two curriculums you'd like to swap.\n"
+			"Leave blank and press Enter to go back."
+	)
+
+	clear()
+	print_list(header, curriculums, under_header=UNDER_ALL_HEADERS)
+	choice = input('Enter here: ')
+
+	if len(choice) == 0:
+		return True
+
+	choices = choice.split()[:2]
+	if len(choices) < 2:
+		return False
+
+	try:
+		a, b = tuple(map(int, choices))
+		curriculums[a - 1], curriculums[b - 1] = curriculums[b - 1], curriculums[a - 1]
+		with open(curriculum_table_path, 'w') as f:
+			for line in curriculums:
+				f.write(line + '\n')
+		return False
+	except ValueError:
+		return False
+
 def main_loop():
-	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
+	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.REARRANGE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
 
 	header = 'Please make a selection'
 
-	current_selection = ''
+	current_selection = MenuOption.NONE
 	while current_selection != MenuOption.EXIT:
 		curriculums = scan_for_curriculums()
 		
@@ -453,6 +482,10 @@ def main_loop():
 				status = False
 				while not status:
 					status = removing_menu(curriculums)
+			elif current_selection == MenuOption.REARRANGE:
+				status = False
+				while not status:
+					status = swap_menu()
 		except ValueError:
 			status = False
 			while not status:
