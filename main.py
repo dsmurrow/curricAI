@@ -288,7 +288,6 @@ def query_ranking(df, query_embedding):
 	df.sort_values('similarity', inplace=True)
 	return df[["Standard", "Description"]]
 
-# TODO: list previously used PKs
 def query_curriculum(curriculum):
 	global stored_queries
 
@@ -350,10 +349,13 @@ def query_curriculum(curriculum):
 		input("Press Enter to return to the main menu.\n")
 	else:
 		mappings = get_mapping(curriculum)
+
 		standard = matched_row["Standard"]
 		desc = matched_row["Description"]
 		entry_dict = {"Name": [name], "Description": [query], "Standard": [standard], "Standard Description": [desc]}
+
 		df = pd.DataFrame(entry_dict)
+
 		mappings = pd.concat([mappings, df], ignore_index=True)
 		mappings.reset_index()
 		mappings.to_csv(get_mapping_path(curriculum))
@@ -490,9 +492,6 @@ def main_loop():
 			status = False
 			while not status:
 				status = curriculum_menu(current_selection)
-
-def map_queries_embedding(queries, f):
-	return {name: {'Description': queries[name]['Description'], 'Embedding': f(queries[name]['Embedding'])} for name in queries}
 
 if __name__ == '__main__':
 	if not data_path.exists() or not data_path.is_dir():
