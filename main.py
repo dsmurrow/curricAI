@@ -66,6 +66,11 @@ def intify(x):
 	except:
 		return -1
 
+def status_loop(call):
+	status = False
+	while not status:
+		status = call()
+
 def read_sheet(path, delete_after=False):
 	if not path.exists():
 		return None
@@ -430,11 +435,9 @@ def curriculum_history(curriculum_name, mappings):
 		selection = MenuOption.from_value(options[selected_number - 1])
 
 		if selection is None:
-			status = False
-			while not status:
-				status = history_entry(curriculum_name, mappings.iloc[selected_number - 1])
-				mappings = mappings.dropna()
-			mappings.to_csv(get_mapping_path(curriculum_name))
+			call_history_entry = lambda: history_entry(curriuclum_name, mappings.iloc[selected_number - 1])
+			status_loop(call_history_entry)
+
 	return True
 
 def curriculum_menu(curriculum):
@@ -560,9 +563,8 @@ def saved_query_menu(entry):
 	if selection == MenuOption.BACK:
 		return True
 	else:
-		status = False
-		while not status:
-			status = saved_query_new_query_menu(entry)
+		call = lambda: saved_query_new_query_menu(entry)
+		status_loop(call)
 		return False
 
 def saved_menu():
@@ -576,10 +578,9 @@ def saved_menu():
 	if selection == MenuOption.BACK:
 		return True
 	else:
-		row = stored_queries.iloc[selection_number- 1]
-		status = False
-		while not status:
-			status = saved_query_menu(row)
+		row = stored_queries.iloc[selection_number - 1]
+		status_loop(lambda: saved_query_menu(row))
+		return False
 
 def main_loop():
 	items = [MenuOption.SCAN.value, MenuOption.SCAN_DELETE.value, MenuOption.SAVED.value, MenuOption.REARRANGE.value, MenuOption.REMOVE.value, MenuOption.EXIT.value]
@@ -600,22 +601,14 @@ def main_loop():
 			currics = scan_new_curriculums(cwd, delete_after=delete_after)
 			establish_new_curriculums(currics, set(curriculums))
 		elif current_selection == MenuOption.REMOVE:
-			status = False
-			while not status:
-				status = removing_menu(curriculums)
+			status_loop(lambda: removing_menu(curriculums))
 		elif current_selection == MenuOption.REARRANGE:
-			status = False
-			while not status:
-				status = swap_menu()
+			status_loop(swap_menu)
 		elif current_selection == MenuOption.SAVED:
-			status = False
-			while not status:
-				status = saved_menu()
+			status_loop(saved_menu)
 		elif current_selection is None:
 			current_selection = current_items[selection_number - 1]
-			status = False
-			while not status:
-				status = curriculum_menu(current_selection)
+			status_loop(lambda: curriculum_menu(current_selection))
 
 if __name__ == '__main__':
 	if not data_path.exists() or not data_path.is_dir():
