@@ -24,7 +24,7 @@ curriculum_table_path = data_path / 'curriculums.txt'
 curriculum_path = data_path / 'currics'
 
 max_tokens = 8000
-stored_queries = pd.DataFrame(columns = ['Name', 'Description', 'Embedding'])
+stored_queries = pd.DataFrame(columns = ['Description', 'Embedding'], index=pd.Index([], name='Name'))
 
 class MenuOption(Enum):
 	YES = 'Yes'
@@ -80,9 +80,9 @@ def read_sheet(path, delete_after=False):
 	df = None
 
 	if extension == '.csv':
-		df = pd.read_csv(path)
+		df = pd.read_csv(path, index_col="Standard")
 	elif extension in {'.xlsx', '.ods'}:
-		df = pd.read_excel(path, sheet_name=None)
+		df = pd.read_excel(path, sheet_name=None, index_col="Standard")
 
 	if delete_after and df is not None:
 		path.unlink()
@@ -95,10 +95,13 @@ def get_curriculum_table_path(curriculum):
 def get_curriculum_table(curriculum):
 	path = get_curriculum_table_path(curriculum)
 
-	table = pd.read_csv(path, index_col=[0])
+	table = pd.read_csv(path, index_col='Standard')
 	table['embedding'] = table.embedding.apply(literal_eval).apply(np.array)
 
 	return table
+
+def empty_index(name):
+	return pd.Index([], name=name)
 
 def get_mapping_path(curriculum):
 	return curriculum_path / curriculum / 'mappings.csv'
@@ -108,12 +111,12 @@ def get_mapping(curriculum):
 	print(path)
 	if not path.exists():
 		path.touch()
-		return pd.DataFrame(columns=['Name', 'Description', 'Standard', 'Standard Description'])
+		return pd.DataFrame(columns=['Description', 'Standard', 'Standard Description'], index=empty_index('Name'))
 	else:
 		try:
-			return pd.read_csv(path, index_col=[0])
+			return pd.read_csv(path, index_col='Name')
 		except pd.errors.EmptyDataError:
-			return pd.DataFrame(columns=['Name', 'Description', 'Standard', 'Standard Description'])		
+			return pd.DataFrame(columns=['Description', 'Standard', 'Standard Description'], index=empty_index('Name'))
 		
 
 def add_under_header(header, under_header, truncate=False):
@@ -159,8 +162,8 @@ def print_list_and_query_input(header, items, under_header=None, truncate_under=
 	return user_input
 
 def scan_new_curriculums(path, delete_after=False):
-	has_right_columns = lambda df: 'Description' in df.columns and 'Standard' in df.columns
-	sanitize = lambda df: df[['Standard', 'Description']].dropna()
+	has_right_columns = lambda df: 'Description' in df.columns and 'Standard' == df.index.name
+	sanitize = lambda df: df[['Description']].dropna()
 
 	files = filter(lambda p: p.is_file(), path.iterdir())
 
@@ -242,7 +245,7 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
 
 		curriculum_dir.mkdir()
 
-		# TODO: Get embeddings
+		# Get embeddings
 		df['embedding'] = df.Description.apply(embed_string)
 
 		df.to_csv(curriculum_dir / 'table.csv')
@@ -319,15 +322,15 @@ def query_ranking(df, query_embedding, include_similarity=False):
 	df['similarity'] = df.embedding.apply(lambda x: distance.cosine(x, query_embedding))
 	df.sort_values('similarity', inplace=True)
 	if include_similarity:
-		return df[["Standard", "Description", "similarity"]]
+		return df[["Description", "similarity"]]
 	else:
-		return df[["Standard", "Description"]]
+		return df[["Description"]]
 
 def present_ranking(df):
 	matched_row = None
 
-	for _, row in df.iterrows():
-		standard_header = f'{row["Standard"]} ({row["similarity"]})'
+	for standard, row in df.iterrows():
+		standard_header = f'{standard} ({row["similarity"]})'
 		standard_header = add_under_header(standard_header, UNDER_ALL_HEADERS)
 
 		desc_header = row["Description"]
@@ -348,12 +351,11 @@ def present_ranking(df):
 	return matched_row
 
 def save_mapping(curriculum, mappings, name, desc, std, std_desc):
-	entry_dict = {'Name': [name], 'Description': [desc], 'Standard': [std], 'Standard Description': [std_desc]}
+	entry_dict = {'Description': [desc], 'Standard': [std], 'Standard Description': [std_desc]}
 
-	df = pd.DataFrame(entry_dict)
+	df = pd.DataFrame(entry_dict, index=pd.Index([name], name='Name'))
 
-	mappings = pd.concat([mappings, df], ignore_index=True)
-	mappings.reset_index()
+	mappings = pd.concat([mappings, df])
 	mappings.to_csv(get_mapping_path(curriculum))
 
 def query_curriculum(curriculum):
@@ -370,7 +372,7 @@ def query_curriculum(curriculum):
 	name = None
 	if selection == MenuOption.YES.value:
 		name = input("Enter name: ")
-		while name in illegal_names or name in stored_queries["Name"].values:
+		while name in illegal_names or name in stored_queries.index:
 			if name in illegal_names:
 				print('That name is illegal. Try again.')
 			else:
@@ -382,10 +384,9 @@ def query_curriculum(curriculum):
 	query_embedding = embed_string(query)
 
 	if name is not None:
-		df2_dict = {'Name': [name], 'Description': [query], 'Embedding': [query_embedding]}
-		df2 = pd.DataFrame.from_dict(df2_dict)
-		stored_queries = pd.concat([stored_queries, df2], ignore_index=True)
-		stored_queries.reset_index()
+		df2_dict = {'Description': [query], 'Embedding': [query_embedding]}
+		df2 = pd.DataFrame(df2_dict, index=pd.Index([name], name='Name'))
+		stored_queries = pd.concat([stored_queries, df2])
 
 	query_embedding = np.array(query_embedding)
 
@@ -399,14 +400,14 @@ def query_curriculum(curriculum):
 	else:
 		mappings = get_mapping(curriculum)
 
-		save_mapping(curriculum, mappings, name, query, matched_row["Standard"], matched_row["Description"])
+		save_mapping(curriculum, mappings, name, query, matched_row.name, matched_row["Description"])
 
 	return True
 
-def history_entry(curriculum, row):
+def history_entry(row):
 	options = [MenuOption.BACK.value]
 
-	name_header = row['Name']
+	name_header = row.name
 	name_header = add_under_header(name_header, UNDER_ALL_HEADERS)
 
 	standard_header = row['Standard']
@@ -421,7 +422,7 @@ def history_entry(curriculum, row):
 def curriculum_history(curriculum_name, mappings):
 	options = [MenuOption.BACK.value]
 	
-	names = mappings.Name.tolist()
+	names = mappings.index.tolist()
 	standards = mappings.Standard.tolist()
 	prepend = [f'{name} -> {std}' for name, std in zip(names, standards)]
 
@@ -435,7 +436,7 @@ def curriculum_history(curriculum_name, mappings):
 		selection = MenuOption.from_value(options[selected_number - 1])
 
 		if selection is None:
-			call_history_entry = lambda: history_entry(curriuclum_name, mappings.iloc[selected_number - 1])
+			call_history_entry = lambda: history_entry(mappings.iloc[selected_number - 1])
 			status_loop(call_history_entry)
 
 	return True
@@ -505,7 +506,7 @@ def saved_query_new_query_menu(entry):
 
 	options = curriculums + options
 
-	header = f'Choose curriculum for {entry["Name"]}'
+	header = f'Choose curriculum for {entry.name}'
 	selection_number = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
 	
 	selection = MenuOption.from_value(options[selection_number - 1])
@@ -516,11 +517,10 @@ def saved_query_new_query_menu(entry):
 
 		mappings = get_mapping(chosen_curriculum)
 
-		if entry["Name"] in mappings["Name"].values:
-			matching_index = mappings.index[mappings["Name"] == entry["Name"]].tolist()[0]
-			mapping_entry = mappings.loc[matching_index]
+		if entry.name in mappings.index:
+			mapping_entry = mappings.loc[entry.name]
 
-			header = f'There is already a mapping for {entry["Name"]} in {chosen_curriculum}.\n\n'
+			header = f'There is already a mapping for {entry.name} in {chosen_curriculum}.\n\n'
 			
 			header += add_under_header(mapping_entry["Standard"], UNDER_ALL_HEADERS)
 
@@ -536,7 +536,7 @@ def saved_query_new_query_menu(entry):
 			if MenuOption(options[selection_number - 1]) == MenuOption.NO:
 				return False
 
-			mappings.drop(matching_index)
+			mappings.drop(entry.name, inplace=True)
 
 		curriculum_table = get_curriculum_table(chosen_curriculum)
 
@@ -546,7 +546,7 @@ def saved_query_new_query_menu(entry):
 		matching_row = present_ranking(ranking)
 
 		if matching_row is not None:
-			save_mapping(chosen_curriculum, mappings, entry["Name"], entry["Description"], matching_row["Standard"], matching_row["Description"])
+			save_mapping(chosen_curriculum, mappings, entry.name, entry["Description"], matching_row.name, matching_row["Description"])
 			return True
 
 		return True
@@ -556,7 +556,7 @@ def saved_query_menu(entry):
 	# TODO: Option to see previous mappings
 	options = [MenuOption.QUERY.value, MenuOption.BACK.value]
 
-	selection_number = print_list_and_query_input(entry["Name"], options, under_header=UNDER_ALL_HEADERS)
+	selection_number = print_list_and_query_input(entry.name, options, under_header=UNDER_ALL_HEADERS)
 
 	selection = MenuOption(options[selection_number - 1])
 
@@ -570,7 +570,7 @@ def saved_query_menu(entry):
 def saved_menu():
 	options = [MenuOption.BACK.value]
 
-	options = stored_queries.Name.tolist() + options
+	options = stored_queries.index.tolist() + options
 
 	selection_number = print_list_and_query_input('Saved', options, under_header=UNDER_ALL_HEADERS)
 	selection = MenuOption.from_value(options[selection_number - 1])
@@ -619,7 +619,7 @@ if __name__ == '__main__':
 		curriculum_path.mkdir()
 
 	try:
-		stored_queries = pd.read_csv(stored_queries_path, index_col=[0])
+		stored_queries = pd.read_csv(stored_queries_path, index_col='Name')
 		stored_queries["Embedding"] = stored_queries.Embedding.apply(literal_eval)
 	except pd.errors.EmptyDataError:
 		pass
