@@ -48,6 +48,7 @@ class MenuOption(Enum):
 		except ValueError:
 			return None
 
+illegal_names = {opt.value for opt in MenuOption}
 
 def clear():
 	name = os.name
@@ -207,6 +208,12 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
 
 			# Get rid of characters that are invalid for filenames
 			name = re.sub('[#%&{}\\<>*?/$!\'":@+`|=]', '', name)
+		
+		while name in illegal_names:
+			print('This name is illegal, try again.')
+			name = input('New name: ')
+
+			name = re.sub('[#%&{}\\<>*?/$!\'":@+`|=]', '', name)
 
 		# Disallow duplicate names
 		if names_used.setdefault(name, 0) > 0:
@@ -356,8 +363,11 @@ def query_curriculum(curriculum):
 	name = None
 	if selection == MenuOption.YES.value:
 		name = input("Enter name: ")
-		while name in stored_queries["Name"].values:
-			print("That name already exists. Try again.")
+		while name in illegal_names or name in stored_queries["Name"].values:
+			if name in illegal_names:
+				print('That name is illegal. Try again.')
+			else:
+				print("That name already exists. Try again.")
 			name = input("Enter name: ")
 
 	query = input("Enter query: ")
@@ -492,7 +502,6 @@ def saved_query_new_query_menu(entry):
 
 	selection_number = print_list_and_query_input(f'Choose curriculum', options, under_header=UNDER_ALL_HEADERS)
 	
-	# TODO: Make enum values illegal names
 	selection = MenuOption.from_value(options[selection_number - 1])
 	if selection == MenuOption.BACK:
 		return True
