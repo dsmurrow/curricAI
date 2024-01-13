@@ -40,6 +40,8 @@ class MenuOption(Enum):
 	SCAN_DELETE = 'Scan and Delete after'
 	QUERY = 'Query'
 	REARRANGE = 'Rearrange'
+	TEXT = 'Text'
+	MAPPING = 'Mapping'
 
 	@classmethod
 	def from_value(cls, value):
@@ -396,9 +398,8 @@ def query_curriculum(curriculum):
 
 	return True
 
-def history_entry(row):
-	# TODO: Edit entry
-	options = [MenuOption.EDIT.value, MenuOption.BACK.value]
+def history_entry(curriculum, row):
+	options = [MenuOption.BACK.value]
 
 	name_header = row['Name']
 	name_header = add_under_header(name_header, UNDER_ALL_HEADERS)
@@ -409,10 +410,8 @@ def history_entry(row):
 	header = f'{name_header}\n{row["Description"]}\n\n{standard_header}\n{row["Standard Description"]}'
 	selection_number = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
 
-	if MenuOption(options[selection_number - 1]) == MenuOption.BACK.value:
+	if MenuOption(options[selection_number - 1]) == MenuOption.BACK:
 		return True
-	elif MenuOption(options[selection_number - 1]) == MenuOption.EDIT.value:
-		pass
 
 def curriculum_history(curriculum_name, mappings):
 	options = [MenuOption.BACK.value]
@@ -431,8 +430,11 @@ def curriculum_history(curriculum_name, mappings):
 		selection = MenuOption.from_value(options[selected_number - 1])
 
 		if selection is None:
-			history_entry(mappings.iloc[selected_number - 1])
-
+			status = False
+			while not status:
+				status = history_entry(curriculum_name, mappings.iloc[selected_number - 1])
+				mappings = mappings.dropna()
+			mappings.to_csv(get_mapping_path(curriculum_name))
 	return True
 
 def curriculum_menu(curriculum):
@@ -500,7 +502,8 @@ def saved_query_new_query_menu(entry):
 
 	options = curriculums + options
 
-	selection_number = print_list_and_query_input(f'Choose curriculum', options, under_header=UNDER_ALL_HEADERS)
+	header = f'Choose curriculum for {entry["Name"]}'
+	selection_number = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
 	
 	selection = MenuOption.from_value(options[selection_number - 1])
 	if selection == MenuOption.BACK:
@@ -534,7 +537,7 @@ def saved_query_new_query_menu(entry):
 
 		curriculum_table = get_curriculum_table(chosen_curriculum)
 
-		embedding = np.array(literal_eval(entry["Embedding"]))
+		embedding = np.array(entry["Embedding"])
 		ranking = query_ranking(curriculum_table, embedding, include_similarity=True)
 
 		matching_row = present_ranking(ranking)
@@ -624,7 +627,7 @@ if __name__ == '__main__':
 
 	try:
 		stored_queries = pd.read_csv(stored_queries_path, index_col=[0])
-		stored_queries['Embedding'] = stored_queries.Embedding.apply(np.array)
+		stored_queries["Embedding"] = stored_queries.Embedding.apply(literal_eval)
 	except pd.errors.EmptyDataError:
 		pass
 
