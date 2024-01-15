@@ -33,6 +33,7 @@ class MenuOption(Enum):
 	EXIT = 'Exit'
 	EDIT = 'Edit'
 	REMOVE = 'Remove'
+	BEST = 'Mark as best so far and continue'
 	HISTORY = 'History'
 	SAVED = 'Saved'
 	SKIP = 'I don\'t want to use this'
@@ -328,6 +329,7 @@ def query_ranking(df, query_embedding, include_similarity=False):
 
 def present_ranking(df):
 	matched_row = None
+	best_so_far = None
 
 	for standard, row in df.iterrows():
 		standard_header = f'{standard} ({row["similarity"]})'
@@ -338,17 +340,23 @@ def present_ranking(df):
 
 		header = f'{standard_header}\n{desc_header}\nIs this a good match?'
 
-		options = [MenuOption.YES.value, MenuOption.NO.value, MenuOption.EXIT.value]
+		options = [MenuOption.YES.value, MenuOption.NO.value, MenuOption.BEST.value, MenuOption.EXIT.value]
 
 		selected_number = print_list_and_query_input(header, options)
 
-		if options[selected_number - 1] == MenuOption.YES.value:
+		selection = MenuOption(options[selected_number - 1])
+		if selection == MenuOption.YES:
 			matched_row = row
 			break
-		elif options[selected_number - 1] == MenuOption.EXIT.value:
+		elif selection == MenuOption.EXIT:
 			break
+		elif selection == MenuOption.BEST:
+			best_so_far = row
 
-	return matched_row
+	if matched_row is not None:
+		return matched_row
+	else:
+		return best_so_far
 
 def save_mapping(curriculum, mappings, name, desc, std, std_desc):
 	entry_dict = {'Description': [desc], 'Standard': [std], 'Standard Description': [std_desc]}
