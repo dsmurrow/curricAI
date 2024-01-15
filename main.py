@@ -1,6 +1,7 @@
 from ast import literal_eval
 from enum import Enum
 from math import ceil
+import multiprocessing as mp
 import numpy as np
 from openai import OpenAI
 import os
@@ -203,6 +204,9 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
 
 	names_used = {name: 1 for name in already_used_names}
 
+	pool = mp.Pool(mp.cpu_count())
+	result_map = {}
+
 	for name, df in filtered_dfs:
 		header = (
 			f'New curriculum "{name}"\n'
@@ -247,9 +251,16 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
 		curriculum_dir.mkdir()
 
 		# Get embeddings
-		df['embedding'] = df.Description.apply(embed_string)
+		result_map[name] = (df, pool.map_async(embed_string, df["Description"]))
 
-		df.to_csv(curriculum_dir / 'table.csv')
+	pool.close()
+
+	for name, tup in result_map.items():
+		df, result = tup
+
+		df['embedding'] = result.get()
+
+		df.to_csv(get_curriculum_table_path(name))
 
 	curriculum_table.close()
 		
