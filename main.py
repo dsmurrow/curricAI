@@ -274,6 +274,32 @@ def scan_for_curriculums():
 
 	return currics
 
+def removal_query(header, items, under_header):
+    valid_indeces = range(1, len(items) + 1)
+
+    while True:
+        clear()
+        print_list(header, items, under_header=under_header)
+        selections = input('Selections: ').split()
+
+        if len(selections) == 0:
+            return []
+        elif len(selections) > 0 and selections[0] == '*':
+            selections = list(valid_indeces)
+
+        index_set = set()
+        for item in selections:
+            try:
+                index_set.add(int(item))
+            except:
+                input('Invalid input. Press Enter to try again\n')
+                continue
+
+        indeces = filter(lambda x: x in valid_indeces, index_set)
+        indeces = list(map(lambda x: x - 1, indeces))
+        return indeces
+
+
 def removing_menu(curriculums):
 	header = (
 		'Write the numbers corresponding to the curriculums you\'d like to remove.\n'
@@ -282,27 +308,10 @@ def removing_menu(curriculums):
 		'Leave blank if you\'d like to leave this menu.'
 	)
 
-	clear()
-	print_list(header, curriculums, under_header=UNDER_ALL_HEADERS)
-	selections = input('Selections: ').split()
-
-	if len(selections) == 0:
+	indeces = removal_query(header, curriculums, under_header=UNDER_ALL_HEADERS)
+    
+	if len(indeces) == 0:
 		return True
-	# Delete everything
-	elif len(selections) > 0 and selections[0] == '*':
-		selections = list(range(1, len(curriculums) + 1))
-
-	index_set = set()
-	for item in selections:
-		try:
-			index_set.add(int(item))
-		except:
-			input('Invalid input detected. Press Enter to return to main menu.\n')
-			return True
-
-	# Input sanitization: In-bounds, 0-based.
-	indeces = filter(lambda x: x in range(1, len(curriculums) + 1), index_set)
-	indeces = list(map(lambda x: x - 1, indeces))
 
 	clear()
 	header = 'Items to be deleted.'
@@ -439,24 +448,48 @@ def history_entry(row):
 		return True
 
 def curriculum_history(curriculum_name, mappings):
-	options = [MenuOption.BACK.value]
-	
-	names = mappings.index.tolist()
-	standards = mappings.Standard.tolist()
-	prepend = [f'{name} -> {std}' for name, std in zip(names, standards)]
-
-	options = prepend + options
-    
-	header = f"Items previously matched to {curriculum_name}"
+	baked_options = [MenuOption.REMOVE.value, MenuOption.BACK.value]
 
 	selection = None
 	while selection != MenuOption.BACK:
+		names = mappings.index.tolist()
+		standards = mappings.Standard.tolist()
+
+		prepend = [f'{name} -> {std}' for name, std in zip(names, standards)]
+
+		options = prepend + baked_options
+    
+		header = f"Items previously matched to {curriculum_name}"
+
 		selected_number = print_list_and_query_input(header, options, under_header=UNDER_ALL_HEADERS)
 		selection = MenuOption.from_value(options[selected_number - 1])
 
 		if selection is None:
 			call_history_entry = lambda: history_entry(mappings.iloc[selected_number - 1])
 			status_loop(call_history_entry)
+		elif selection is MenuOption.REMOVE:
+			header = (
+				'Type out the numbers corresponding to the mappings you\'d like to remove.\n'
+				'Leave a space between each entry.\n'
+				'Leave empty to go back. Type only \'*\' to delete all entries.'
+			)
+
+			indeces = removal_query(header, prepend, under_header=UNDER_ALL_HEADERS)
+
+			if len(indeces) == 0:
+				continue
+
+			clear()
+			print_list('Items to be deleted:', [prepend[i] for i in indeces], indeces=indeces, under_header=UNDER_ALL_HEADERS)
+			confirmation = input('Delete these items? (Y)es or (N)o?: ')
+
+			if len(confirmation) > 0 and confirmation[0].lower() != 'y':
+				continue
+
+			for name in [names[i] for i in indeces]:
+				mappings.drop(name, inplace=True)
+
+			mappings.to_csv(get_mapping_path(curriculum_name))
 
 	return True
 
@@ -487,8 +520,11 @@ def curriculum_menu(curriculum):
 		return query_curriculum(curriculum)
 	else:
 		mappings = get_mapping(curriculum)
+		call = lambda: curriculum_history(curriculum, mappings)
 
-		return curriculum_history(curriculum, mappings)
+		status_loop(call)
+
+		return False
 
 def swap_menu():
 	curriculums = scan_for_curriculums()
