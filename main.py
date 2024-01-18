@@ -1,13 +1,13 @@
 from ast import literal_eval
+import os
+from pathlib import Path
+import re
+import shutil
+
 from math import ceil
 import multiprocessing as mp
 import numpy as np
-import os
 import pandas as pd
-from pathlib import Path
-import re
-from scipy.spatial import distance
-import shutil
 import tiktoken
 
 from ai_calls import embed_string
@@ -24,11 +24,12 @@ stored_queries_path = data_path / 'queries.csv'
 curriculum_table_path = data_path / 'curriculums.txt'
 curriculum_path = data_path / 'currics'
 
-max_tokens = 8000
+MAX_TOKENS = 8000
 stored_queries = pd.DataFrame(
     columns=['Description', 'Embedding'], index=pd.Index([], name='Name'))
 
 illegal_names = {opt.value for opt in MenuOption}
+
 
 def clear():
     name = os.name
@@ -42,7 +43,7 @@ def clear():
 def intify(x):
     try:
         return int(x)
-    except:
+    except ValueError:
         return -1
 
 
@@ -69,6 +70,7 @@ def read_sheet(path, delete_after=False):
         path.unlink()
 
     return df
+
 
 def empty_index(name):
     return pd.Index([], name=name)
@@ -123,9 +125,8 @@ def print_list(header, items, indeces=None, under_header=None, truncate_under=Fa
 
 def print_list_and_query_input(header, items, under_header=None, truncate_under=False):
     max_accepted_input = len(items)
-    def is_valid(x): return x >= 1 and x <= max_accepted_input
-
-    padding = len(str(len(items)))
+    def is_valid(x):
+        return x >= 1 and x <= max_accepted_input
 
     user_input = -1
     while not is_valid(user_input):
@@ -142,7 +143,8 @@ def scan_new_curriculums(path, delete_after=False):
     def has_right_columns(
         df): return 'Description' in df.columns and 'Standard' == df.index.name
 
-    def sanitize(df): return df[['Description']].dropna()
+    def sanitize(df):
+        return df[['Description']].dropna()
 
     files = filter(lambda p: p.is_file(), path.iterdir())
 
@@ -167,15 +169,16 @@ def scan_new_curriculums(path, delete_after=False):
 
 
 def establish_new_curriculums(named_dfs, already_used_names=set()):
-    def token_len(x): return len(encoding.encode(x))
-    def too_many_tokens(df): return df.Description.apply(
-        token_len).gt(max_tokens).any()
+    def token_len(x):
+        return len(encoding.encode(x))
+    def too_many_tokens(df):
+        return df.Description.apply(token_len).gt(MAX_TOKENS).any()
     filtered_dfs = filter(lambda p: not too_many_tokens(p[1]), named_dfs)
 
     options = [MenuOption.YES.value,
                MenuOption.NO.value, MenuOption.SKIP.value]
 
-    curriculum_table = open(curriculum_table_path, 'a')
+    curriculum_table = open(curriculum_table_path, 'a', encoding='utf-8')
 
     names_used = {name: 1 for name in already_used_names}
 
@@ -240,7 +243,7 @@ def scan_for_curriculums():
     if not curriculum_table_path.exists() or not curriculum_table_path.is_file():
         curriculum_table_path.touch()
 
-    with open(curriculum_table_path, 'r') as file:
+    with open(curriculum_table_path, 'r', encoding='utf-8') as file:
         currics = list(map(lambda x: x[:-1], file))
 
     return currics
@@ -263,7 +266,7 @@ def removal_query(header, items, under_header):
         for item in selections:
             try:
                 index_set.add(int(item))
-            except:
+            except ValueError:
                 input('Invalid input. Press Enter to try again\n')
                 continue
 
@@ -306,11 +309,12 @@ def removing_menu(curriculums):
 
         del curriculums[i]
 
-    with open(curriculum_table_path, 'w') as f:
+    with open(curriculum_table_path, 'w', encoding='utf-8') as f:
         for curriculum in curriculums:
             f.write(curriculum + '\n')
 
     return True
+
 
 def present_ranking(df):
     matched_row = None
@@ -437,8 +441,8 @@ def curriculum_history(curriculum: Curriculum, mappings):
         selection = MenuOption.from_value(options[selected_number - 1])
 
         if selection is None:
-            def call_history_entry(): return history_entry(
-                mappings.iloc[selected_number - 1])
+            def call_history_entry():
+                return history_entry(mappings.iloc[selected_number - 1])
             status_loop(call_history_entry)
         elif selection is MenuOption.REMOVE:
             header = (
@@ -486,11 +490,11 @@ def curriculum_menu(curriculum: Curriculum):
 
         shutil.rmtree(curriculum.directory)
 
-        with open(curriculum_table_path, 'r') as f:
+        with open(curriculum_table_path, 'r', encoding='utf-8') as f:
             lines = filter(lambda x: x != curriculum.name, map(
                 lambda x: x[:-1], f.readlines()))
 
-        with open(curriculum_table_path, 'w') as f:
+        with open(curriculum_table_path, 'w', encoding='utf-8') as f:
             for line in lines:
                 f.write(line + '\n')
 
@@ -528,7 +532,7 @@ def swap_menu():
         a, b = tuple(map(int, choices))
         curriculums[a - 1], curriculums[b -
                                         1] = curriculums[b - 1], curriculums[a - 1]
-        with open(curriculum_table_path, 'w') as f:
+        with open(curriculum_table_path, 'w', encoding='utf-8') as f:
             for line in curriculums:
                 f.write(line + '\n')
         return False

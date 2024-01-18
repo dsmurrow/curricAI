@@ -1,11 +1,13 @@
 from ast import literal_eval
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from scipy.spatial import distance
 
 from ai_calls import embed_string
 from baked_paths import CURRICULUM_DIR_PATH, CURRICULUM_TABLE_FILENAME
+
 
 class Curriculum:
     _DF_EMBEDDING_COLUMN_NAME = 'embedding'
@@ -14,19 +16,22 @@ class Curriculum:
         self._name = name
         self.save_on_del = save_on_del
 
-        self.table_path = table_path or CURRICULUM_DIR_PATH / name / CURRICULUM_TABLE_FILENAME
+        self.table_path = table_path or CURRICULUM_DIR_PATH / \
+            name / CURRICULUM_TABLE_FILENAME
 
         if df is None:
             self._df = pd.read_csv(self.table_path, index_col='Standard')
-            self._df[Curriculum._DF_EMBEDDING_COLUMN_NAME] = self._df.embedding.apply(literal_eval).apply(np.array)
+            self._df[Curriculum._DF_EMBEDDING_COLUMN_NAME] = self._df.embedding.apply(
+                literal_eval).apply(np.array)
         else:
             self._df = df.copy(deep=True)
 
         if Curriculum._DF_EMBEDDING_COLUMN_NAME not in self._df.columns:
-            self._df[Curriculum._DF_EMBEDDING_COLUMN_NAME] = self._df.Description.apply(embed_string)
+            self._df[Curriculum._DF_EMBEDDING_COLUMN_NAME] = self._df.Description.apply(
+                embed_string)
 
     def query(self, query: str | list[float] | np.ndarray, include_similarity=False) -> pd.DataFrame:
-        if type(query) != str:
+        if isinstance(query, str):
             query_embedding = query
         else:
             query_embedding = embed_string(query)
