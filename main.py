@@ -2,7 +2,6 @@ from ast import literal_eval
 from math import ceil
 import multiprocessing as mp
 import numpy as np
-from openai import OpenAI
 import os
 import pandas as pd
 from pathlib import Path
@@ -11,11 +10,11 @@ from scipy.spatial import distance
 import shutil
 import tiktoken
 
+from ai_calls import embed_string
+from curriculum import Curriculum
 from menu_option import MenuOption
 
 UNDER_ALL_HEADERS = '=' * 3
-
-client = OpenAI()
 
 encoding = tiktoken.get_encoding('cl100k_base')
 
@@ -70,20 +69,6 @@ def read_sheet(path, delete_after=False):
         path.unlink()
 
     return df
-
-
-def get_curriculum_table_path(curriculum):
-    return curriculum_path / curriculum / 'table.csv'
-
-
-def get_curriculum_table(curriculum):
-    path = get_curriculum_table_path(curriculum)
-
-    table = pd.read_csv(path, index_col='Standard')
-    table['embedding'] = table.embedding.apply(literal_eval).apply(np.array)
-
-    return table
-
 
 def empty_index(name):
     return pd.Index([], name=name)
@@ -181,11 +166,6 @@ def scan_new_curriculums(path, delete_after=False):
     return dfs
 
 
-def embed_string(string, model='text-embedding-ada-002'):
-    text = string.replace('\n', ' ')
-    return client.embeddings.create(input=text, model=model).data[0].embedding
-
-
 def establish_new_curriculums(named_dfs, already_used_names=set()):
     def token_len(x): return len(encoding.encode(x))
     def too_many_tokens(df): return df.Description.apply(
@@ -200,7 +180,7 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
     names_used = {name: 1 for name in already_used_names}
 
     pool = mp.Pool(mp.cpu_count())
-    result_map = {}
+    result_list = []
 
     for name, df in filtered_dfs:
         header = (
@@ -247,17 +227,11 @@ def establish_new_curriculums(named_dfs, already_used_names=set()):
         curriculum_dir.mkdir()
 
         # Get embeddings
-        result_map[name] = (df, pool.map_async(
-            embed_string, df["Description"]))
-
+        result_list.append(pool.apply_async(Curriculum, (name, df,)))
     pool.close()
 
-    for name, tup in result_map.items():
-        df, result = tup
-
-        df['embedding'] = result.get()
-
-        df.to_csv(get_curriculum_table_path(name))
+    for result in result_list:
+        result.get().save()
 
     curriculum_table.close()
 
@@ -338,18 +312,6 @@ def removing_menu(curriculums):
 
     return True
 
-
-def query_ranking(df, query_embedding, include_similarity=False):
-    df = df.copy()
-    df['similarity'] = df.embedding.apply(
-        lambda x: distance.cosine(x, query_embedding))
-    df.sort_values('similarity', inplace=True)
-    if include_similarity:
-        return df[["Description", "similarity"]]
-    else:
-        return df[["Description"]]
-
-
 def present_ranking(df):
     matched_row = None
     best_so_far = None
@@ -393,12 +355,10 @@ def save_mapping(curriculum, mappings, name, desc, std, std_desc):
     mappings.to_csv(get_mapping_path(curriculum))
 
 
-def query_curriculum(curriculum):
+def query_curriculum(curriculum: Curriculum):
     global stored_queries
 
     clear()
-
-    df = get_curriculum_table(curriculum)
 
     header = 'Would you like to save this query?'
     options = [MenuOption.YES.value, MenuOption.NO.value]
@@ -425,7 +385,7 @@ def query_curriculum(curriculum):
 
     query_embedding = np.array(query_embedding)
 
-    results = query_ranking(df, query_embedding, include_similarity=True)
+    results = curriculum.query(query_embedding, include_similarity=True)
 
     matched_row = present_ranking(results)
 
@@ -433,9 +393,9 @@ def query_curriculum(curriculum):
         print("It seems like there are no standards in this curriculum that match what you're looking for")
         input("Press Enter to return to the main menu.\n")
     else:
-        mappings = get_mapping(curriculum)
+        mappings = get_mapping(curriculum.name)
 
-        save_mapping(curriculum, mappings, name, query,
+        save_mapping(curriculum.name, mappings, name, query,
                      matched_row.name, matched_row["Description"])
 
     return True
@@ -458,7 +418,7 @@ def history_entry(row):
         return True
 
 
-def curriculum_history(curriculum_name, mappings):
+def curriculum_history(curriculum: Curriculum, mappings):
     baked_options = [MenuOption.REMOVE.value, MenuOption.BACK.value]
 
     selection = None
@@ -470,7 +430,7 @@ def curriculum_history(curriculum_name, mappings):
 
         options = prepend + baked_options
 
-        header = f"Items previously matched to {curriculum_name}"
+        header = f"Items previously matched to {curriculum.name}"
 
         selected_number = print_list_and_query_input(
             header, options, under_header=UNDER_ALL_HEADERS)
@@ -504,17 +464,17 @@ def curriculum_history(curriculum_name, mappings):
             for name in [names[i] for i in indeces]:
                 mappings.drop(name, inplace=True)
 
-            mappings.to_csv(get_mapping_path(curriculum_name))
+            mappings.to_csv(get_mapping_path(curriculum.name))
 
     return True
 
 
-def curriculum_menu(curriculum):
+def curriculum_menu(curriculum: Curriculum):
     options = [MenuOption.QUERY.value, MenuOption.HISTORY.value,
                MenuOption.REMOVE.value, MenuOption.BACK.value]
 
     selected_number = print_list_and_query_input(
-        curriculum, options, under_header=UNDER_ALL_HEADERS)
+        curriculum.name, options, under_header=UNDER_ALL_HEADERS)
     selection = MenuOption(options[selected_number - 1])
 
     if selection == MenuOption.BACK:
@@ -524,10 +484,10 @@ def curriculum_menu(curriculum):
         if confirmation[0].lower() != 'y':
             return False
 
-        shutil.rmtree(curriculum_path / curriculum)
+        shutil.rmtree(curriculum.directory)
 
         with open(curriculum_table_path, 'r') as f:
-            lines = filter(lambda x: x != curriculum, map(
+            lines = filter(lambda x: x != curriculum.name, map(
                 lambda x: x[:-1], f.readlines()))
 
         with open(curriculum_table_path, 'w') as f:
@@ -538,7 +498,7 @@ def curriculum_menu(curriculum):
     elif selection == MenuOption.QUERY:
         return query_curriculum(curriculum)
     else:
-        mappings = get_mapping(curriculum)
+        mappings = get_mapping(curriculum.name)
         def call(): return curriculum_history(curriculum, mappings)
 
         status_loop(call)
@@ -591,14 +551,14 @@ def saved_query_new_query_menu(entry):
     if selection == MenuOption.BACK:
         return True
     else:
-        chosen_curriculum = curriculums[selection_number - 1]
+        curriculum = Curriculum(curriculums[selection_number - 1])
 
-        mappings = get_mapping(chosen_curriculum)
+        mappings = get_mapping(curriculum.name)
 
         if entry.name in mappings.index:
             mapping_entry = mappings.loc[entry.name]
 
-            header = f'There is already a mapping for {entry.name} in {chosen_curriculum}.\n\n'
+            header = f'There is already a mapping for {entry.name} in {curriculum.name}.\n\n'
 
             header += add_under_header(
                 mapping_entry["Standard"], UNDER_ALL_HEADERS)
@@ -617,16 +577,13 @@ def saved_query_new_query_menu(entry):
 
             mappings.drop(entry.name, inplace=True)
 
-        curriculum_table = get_curriculum_table(chosen_curriculum)
-
         embedding = np.array(entry["Embedding"])
-        ranking = query_ranking(
-            curriculum_table, embedding, include_similarity=True)
+        ranking = curriculum.query(embedding, include_similarity=True)
 
         matching_row = present_ranking(ranking)
 
         if matching_row is not None:
-            save_mapping(chosen_curriculum, mappings, entry.name,
+            save_mapping(curriculum.name, mappings, entry.name,
                          entry["Description"], matching_row.name, matching_row["Description"])
             return True
 
@@ -696,7 +653,7 @@ def main_loop():
             status_loop(saved_menu)
         elif current_selection is None:
             current_selection = current_items[selection_number - 1]
-            status_loop(lambda: curriculum_menu(current_selection))
+            status_loop(lambda: curriculum_menu(Curriculum(current_selection)))
 
 
 if __name__ == '__main__':
