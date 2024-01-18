@@ -31,7 +31,7 @@ class Curriculum:
                 embed_string)
 
     def query(self, query: str | list[float] | np.ndarray, include_similarity=False) -> pd.DataFrame:
-        if isinstance(query, str):
+        if not isinstance(query, str):
             query_embedding = query
         else:
             query_embedding = embed_string(query)
@@ -73,7 +73,7 @@ class Curriculum:
         self._save_on_del = will_save
 
     def __getitem__(self, index: str):
-        return self._df[index]
+        return self._df.loc[index]
 
     def __del__(self):
         if self._save_on_del:
