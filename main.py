@@ -1,5 +1,4 @@
 from ast import literal_eval
-from enum import Enum
 from math import ceil
 import multiprocessing as mp
 import numpy as np
@@ -11,6 +10,8 @@ import re
 from scipy.spatial import distance
 import shutil
 import tiktoken
+
+from menu_option import MenuOption
 
 UNDER_ALL_HEADERS = '=' * 3
 
@@ -28,35 +29,7 @@ max_tokens = 8000
 stored_queries = pd.DataFrame(
     columns=['Description', 'Embedding'], index=pd.Index([], name='Name'))
 
-
-class MenuOption(Enum):
-    YES = 'Yes'
-    NO = 'No'
-    BACK = 'Back'
-    EXIT = 'Exit'
-    EDIT = 'Edit'
-    REMOVE = 'Remove'
-    BEST = 'Mark as best so far and continue'
-    HISTORY = 'History'
-    SAVED = 'Saved'
-    SKIP = 'I don\'t want to use this'
-    SCAN = 'Scan'
-    SCAN_DELETE = 'Scan and Delete after'
-    QUERY = 'Query'
-    REARRANGE = 'Rearrange'
-    TEXT = 'Text'
-    MAPPING = 'Mapping'
-
-    @classmethod
-    def from_value(cls, value):
-        try:
-            return cls(value)
-        except ValueError:
-            return None
-
-
 illegal_names = {opt.value for opt in MenuOption}
-
 
 def clear():
     name = os.name
