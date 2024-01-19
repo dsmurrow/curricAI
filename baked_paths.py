@@ -1,3 +1,5 @@
+"""File path constants for external data"""
+
 from pathlib import Path
 
 DATA_DIRNAME = 'data'
