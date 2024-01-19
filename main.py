@@ -30,6 +30,8 @@ stored_queries = pd.DataFrame(
 
 illegal_names = {opt.value for opt in MenuOption}
 
+curriculum_map = {}
+
 
 def clear():
     name = os.name
@@ -71,27 +73,11 @@ def read_sheet(path, delete_after=False):
 
     return df
 
+def get_curriculum_object(name):
+    if name not in curriculum_map:
+        curriculum_map[name] = Curriculum(name)
 
-def empty_index(name):
-    return pd.Index([], name=name)
-
-
-def get_mapping_path(curriculum):
-    return curriculum_path / curriculum / 'mappings.csv'
-
-
-def get_mapping(curriculum):
-    path = get_mapping_path(curriculum)
-    print(path)
-    if not path.exists():
-        path.touch()
-        return pd.DataFrame(columns=['Description', 'Standard', 'Standard Description'], index=empty_index('Name'))
-    else:
-        try:
-            return pd.read_csv(path, index_col='Name')
-        except pd.errors.EmptyDataError:
-            return pd.DataFrame(columns=['Description', 'Standard', 'Standard Description'], index=empty_index('Name'))
-
+    return curriculum_map[name]
 
 def add_under_header(header, under_header, truncate=False):
     longest_line = max(header.split('\n'), key=len)
@@ -349,16 +335,6 @@ def present_ranking(df):
         return best_so_far
 
 
-def save_mapping(curriculum, mappings, name, desc, std, std_desc):
-    entry_dict = {'Description': [desc], 'Standard': [
-        std], 'Standard Description': [std_desc]}
-
-    df = pd.DataFrame(entry_dict, index=pd.Index([name], name='Name'))
-
-    mappings = pd.concat([mappings, df])
-    mappings.to_csv(get_mapping_path(curriculum))
-
-
 def query_curriculum(curriculum: Curriculum):
     global stored_queries
 
@@ -397,10 +373,7 @@ def query_curriculum(curriculum: Curriculum):
         print("It seems like there are no standards in this curriculum that match what you're looking for")
         input("Press Enter to return to the main menu.\n")
     else:
-        mappings = get_mapping(curriculum.name)
-
-        save_mapping(curriculum.name, mappings, name, query,
-                     matched_row.name, matched_row["Description"])
+        curriculum.mapping.add_mapping(name, query, matched_row.name, matched_row['Description'])
 
     return True
 
@@ -422,13 +395,13 @@ def history_entry(row):
         return True
 
 
-def curriculum_history(curriculum: Curriculum, mappings):
+def curriculum_history(curriculum: Curriculum):
     baked_options = [MenuOption.REMOVE.value, MenuOption.BACK.value]
 
     selection = None
     while selection != MenuOption.BACK:
-        names = mappings.index.tolist()
-        standards = mappings.Standard.tolist()
+        names = curriculum.mapping.names
+        standards = curriculum.mapping.standards
 
         prepend = [f'{name} -> {std}' for name, std in zip(names, standards)]
 
@@ -442,7 +415,7 @@ def curriculum_history(curriculum: Curriculum, mappings):
 
         if selection is None:
             def call_history_entry():
-                return history_entry(mappings.iloc[selected_number - 1])
+                return history_entry(curriculum.mapping[selected_number - 1])
             status_loop(call_history_entry)
         elif selection is MenuOption.REMOVE:
             header = (
@@ -466,9 +439,7 @@ def curriculum_history(curriculum: Curriculum, mappings):
                 continue
 
             for name in [names[i] for i in indeces]:
-                mappings.drop(name, inplace=True)
-
-            mappings.to_csv(get_mapping_path(curriculum.name))
+                curriculum.mapping.remove(name)
 
     return True
 
@@ -502,8 +473,8 @@ def curriculum_menu(curriculum: Curriculum):
     elif selection == MenuOption.QUERY:
         return query_curriculum(curriculum)
     else:
-        mappings = get_mapping(curriculum.name)
-        def call(): return curriculum_history(curriculum, mappings)
+        def call():
+            return curriculum_history(curriculum)
 
         status_loop(call)
 
@@ -555,12 +526,10 @@ def saved_query_new_query_menu(entry):
     if selection == MenuOption.BACK:
         return True
     else:
-        curriculum = Curriculum(curriculums[selection_number - 1])
+        curriculum = get_curriculum_object(curriculums[selection_number - 1])
 
-        mappings = get_mapping(curriculum.name)
-
-        if entry.name in mappings.index:
-            mapping_entry = mappings.loc[entry.name]
+        if entry.name in curriculum.mapping.names:
+            mapping_entry = curriculum.mapping[entry.name]
 
             header = f'There is already a mapping for {entry.name} in {curriculum.name}.\n\n'
 
@@ -579,7 +548,7 @@ def saved_query_new_query_menu(entry):
             if MenuOption(options[selection_number - 1]) == MenuOption.NO:
                 return False
 
-            mappings.drop(entry.name, inplace=True)
+            curriculum.mapping.remove(entry.name)
 
         embedding = np.array(entry["Embedding"])
         ranking = curriculum.query(embedding, include_similarity=True)
@@ -587,8 +556,7 @@ def saved_query_new_query_menu(entry):
         matching_row = present_ranking(ranking)
 
         if matching_row is not None:
-            save_mapping(curriculum.name, mappings, entry.name,
-                         entry["Description"], matching_row.name, matching_row["Description"])
+            curriculum.mapping.add_mapping(entry.name, entry['Description'], matching_row.name, matching_row['Description'])
             return True
 
         return True
@@ -606,7 +574,8 @@ def saved_query_menu(entry):
     if selection == MenuOption.BACK:
         return True
     else:
-        def call(): return saved_query_new_query_menu(entry)
+        def call():
+            return saved_query_new_query_menu(entry)
         status_loop(call)
         return False
 
@@ -657,7 +626,8 @@ def main_loop():
             status_loop(saved_menu)
         elif current_selection is None:
             current_selection = current_items[selection_number - 1]
-            status_loop(lambda: curriculum_menu(Curriculum(current_selection)))
+            obj = get_curriculum_object(current_selection)
+            status_loop(lambda: curriculum_menu(obj))
 
 
 if __name__ == '__main__':
@@ -676,5 +646,8 @@ if __name__ == '__main__':
         pass
 
     main_loop()
+
+    for obj in curriculum_map.values():
+        obj.mapping.save()
 
     stored_queries.to_csv(stored_queries_path)
