@@ -71,6 +71,7 @@ def read_sheet(path: Path, delete_after: bool = False):
     if extension == '.csv':
         df = pd.read_csv(path, index_col="Standard")
     elif extension in {'.xlsx', '.ods'}:
+        # Reads all excel sheets, must all be compatible or program will fail
         df = pd.read_excel(path, sheet_name=None, index_col="Standard")
 
     if delete_after and df is not None:
@@ -231,7 +232,7 @@ def establish_new_curriculums(named_dfs: list[pd.DataFrame], already_used_names=
 
         names_used[name] += 1
 
-        # Make directories for them
+        # Make directories for curriculums
         curriculum_dir = CURRICULUM_DIR_PATH / name
         curriculum_table.write(name + '\n')
 
