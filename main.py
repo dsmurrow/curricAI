@@ -5,7 +5,7 @@ from collections.abc import Iterable
 import os
 from pathlib import Path
 import re
-from typing import Optional
+from typing import Any, Callable, Optional, Union
 import shutil
 
 from math import ceil
@@ -52,7 +52,7 @@ def intify(x) -> int:
         return -1
 
 
-def status_loop(call):
+def status_loop(call: Callable[[], Any]):
     """Loop function until it returns a truthy value"""
     status = False
     while not status:
@@ -61,7 +61,8 @@ def status_loop(call):
     return status
 
 
-def read_sheet(path: Path, delete_after: bool = False):
+def read_sheet(path: Path, delete_after: bool = False) \
+                -> Optional[Union[pd.DataFrame, dict[str, pd.DataFrame]]]:
     """Read curriculum-formatted datasheet"""
     if not path.exists():
         return None
@@ -82,7 +83,7 @@ def read_sheet(path: Path, delete_after: bool = False):
     return df
 
 
-def get_curriculum_object(name: str):
+def get_curriculum_object(name: str) -> Curriculum:
     """Lazily-initialized curriculum objects"""
     if name not in curriculum_map:
         curriculum_map[name] = Curriculum(name)
@@ -90,7 +91,7 @@ def get_curriculum_object(name: str):
     return curriculum_map[name]
 
 
-def add_under_header(header: str, under_header: str, truncate: bool = False):
+def add_under_header(header: str, under_header: str, truncate: bool = False) -> str:
     """Format text to put under_header under the header"""
     longest_line = max(header.split('\n'), key=len)
 
@@ -125,13 +126,13 @@ def print_list(header: str, items: Iterable[str], *, indeces: Optional[Iterable[
 
 def print_list_and_query_input(header: str, items: Iterable[str],
                                *, under_header: Optional[str] = None,
-                               truncate_under: str = False):
+                               truncate_under: str = False) -> int:
     """Print list of items and then go into a strict input loop \
         that only accepts the numbers of the given options"""
     max_accepted_input = len(items)
 
-    def is_valid(x):
-        return x >= 1 and x <= max_accepted_input
+    def is_valid(x: int) -> bool:
+        return 1 <= x <= max_accepted_input
 
     user_input = -1
     while not is_valid(user_input):
@@ -144,7 +145,7 @@ def print_list_and_query_input(header: str, items: Iterable[str],
     return user_input
 
 
-def scan_new_curriculums(path: Path, delete_after=False):
+def scan_new_curriculums(path: Path, delete_after: bool = False) -> list[pd.DataFrame]:
     """Scan and parse spreadsheets in cwd"""
     def has_right_columns(df):
         return 'Description' in df.columns and 'Standard' == df.index.name
@@ -252,7 +253,7 @@ def establish_new_curriculums(named_dfs: list[pd.DataFrame],
     curriculum_table.close()
 
 
-def scan_for_curriculums():
+def scan_for_curriculums() -> list[str]:
     """Get curriculum list."""
     if not CURRICULUM_LIST_PATH.exists() or not CURRICULUM_LIST_PATH.is_file():
         CURRICULUM_LIST_PATH.touch()
@@ -263,7 +264,7 @@ def scan_for_curriculums():
     return currics
 
 
-def removal_query(header: str, items: Iterable[str], under_header: str):
+def removal_query(header: str, items: Iterable[str], under_header: str) -> list[int]:
     """Generic menu for removing any set of items."""
     valid_indeces = range(1, len(items) + 1)
 
@@ -274,7 +275,7 @@ def removal_query(header: str, items: Iterable[str], under_header: str):
 
         if len(selections) == 0:
             return []
-        elif len(selections) > 0 and selections[0] == '*':
+        if len(selections) > 0 and selections[0] == '*':
             selections = list(valid_indeces)
 
         index_set = set()
@@ -290,7 +291,7 @@ def removal_query(header: str, items: Iterable[str], under_header: str):
         return indeces
 
 
-def removing_menu(curriculums: list[str]):
+def removing_menu(curriculums: list[str]) -> bool:
     """When the user selects the 'Remove' option in the main menu."""
     header = (
         'Write the numbers corresponding to the curriculums you\'d like to remove.\n'
@@ -332,7 +333,7 @@ def removing_menu(curriculums: list[str]):
     return True
 
 
-def present_ranking(df: pd.DataFrame):
+def present_ranking(df: pd.DataFrame) -> pd.Series:
     """Present the curriculum standards of order of their similarity with a query."""
     matched_row = None
     best_so_far = None
@@ -355,9 +356,9 @@ def present_ranking(df: pd.DataFrame):
         if selection == MenuOption.YES:
             matched_row = row
             break
-        elif selection == MenuOption.EXIT:
+        if selection == MenuOption.EXIT:
             break
-        elif selection == MenuOption.BEST:
+        if selection == MenuOption.BEST:
             best_so_far = row
 
     if matched_row is None:
@@ -366,7 +367,7 @@ def present_ranking(df: pd.DataFrame):
     return matched_row
 
 
-def query_curriculum(curriculum: Curriculum):
+def query_curriculum(curriculum: Curriculum) -> bool:
     """Give the curriculum a query to find a good match."""
     global stored_queries
 
@@ -411,7 +412,7 @@ def query_curriculum(curriculum: Curriculum):
     return True
 
 
-def history_entry(row: pd.Series):
+def history_entry(row: pd.Series) -> bool:
     """Menu to see the details of a chosen mapping."""
     options = [MenuOption.BACK.value]
 
@@ -434,7 +435,7 @@ def history_entry(row: pd.Series):
     return False
 
 
-def curriculum_history(curriculum: Curriculum):
+def curriculum_history(curriculum: Curriculum) -> bool:
     """The menu for a chosen curriculum's query mappings."""
     baked_options = [MenuOption.REMOVE.value, MenuOption.BACK.value]
 
@@ -486,7 +487,7 @@ def curriculum_history(curriculum: Curriculum):
     return True
 
 
-def curriculum_menu(curriculum: Curriculum):
+def curriculum_menu(curriculum: Curriculum) -> bool:
     """Menu for when the user selects one of the saved curriculums."""
     options = [MenuOption.QUERY.value, MenuOption.HISTORY.value,
                MenuOption.REMOVE.value, MenuOption.BACK.value]
@@ -524,7 +525,7 @@ def curriculum_menu(curriculum: Curriculum):
     return False
 
 
-def swap_menu():
+def swap_menu() -> bool:
     """The 'Swap' menu option."""
     curriculums = scan_for_curriculums()
     header = (
@@ -555,7 +556,7 @@ def swap_menu():
         return False
 
 
-def saved_query_new_query_menu(entry: pd.Series):
+def saved_query_new_query_menu(entry: pd.Series) -> bool:
     """When the user, from the saved query menu, chooses to query a different curriculum."""
     curriculums = scan_for_curriculums()
 
@@ -608,7 +609,7 @@ def saved_query_new_query_menu(entry: pd.Series):
     return False
 
 
-def saved_query_menu(entry: pd.Series):
+def saved_query_menu(entry: pd.Series) -> bool:
     """When the user selects a saved query."""
 
     # TODO: Option to see previous mappings
@@ -629,7 +630,7 @@ def saved_query_menu(entry: pd.Series):
     return False
 
 
-def saved_menu():
+def saved_menu() -> bool:
     """What happens when user selects the 'Saved' option."""
     options = [MenuOption.BACK.value]
 
