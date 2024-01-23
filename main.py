@@ -5,6 +5,7 @@ from collections.abc import Iterable
 import os
 from pathlib import Path
 import re
+from typing import Optional
 import shutil
 
 from math import ceil
@@ -103,8 +104,8 @@ def add_under_header(header: str, under_header: str, truncate: bool = False):
     return header + '\n' + under
 
 
-def print_list(header: str, items: Iterable[str], *, indeces: Iterable[str] = None,
-               under_header: str = None, truncate_under: bool = False):
+def print_list(header: str, items: Iterable[str], *, indeces: Optional[Iterable[str]] = None,
+               under_header: Optional[str] = None, truncate_under: bool = False):
     """Print list of items"""
     if under_header is not None:
         header = add_under_header(
@@ -123,7 +124,8 @@ def print_list(header: str, items: Iterable[str], *, indeces: Iterable[str] = No
 
 
 def print_list_and_query_input(header: str, items: Iterable[str],
-                               *, under_header: str = None, truncate_under: str = False):
+                               *, under_header: Optional[str] = None,
+                               truncate_under: str = False):
     """Print list of items and then go into a strict input loop \
         that only accepts the numbers of the given options"""
     max_accepted_input = len(items)
@@ -172,7 +174,8 @@ def scan_new_curriculums(path: Path, delete_after=False):
     return dfs
 
 
-def establish_new_curriculums(named_dfs: list[pd.DataFrame], already_used_names=None):
+def establish_new_curriculums(named_dfs: list[pd.DataFrame],
+                              already_used_names: set[str] = None):
     """Sanitize scanned DataFrames and settle them into the system"""
     if already_used_names is None:
         already_used_names = set()

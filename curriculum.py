@@ -2,6 +2,7 @@
 
 from ast import literal_eval
 from pathlib import Path
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -61,7 +62,7 @@ class Mapping:
         """Path that save() will write to"""
         return self._path
 
-    def __getitem__(self, index: str | int) -> pd.Series:
+    def __getitem__(self, index: Union[str, int]) -> pd.Series:
         if isinstance(index, str):
             return self._df.loc[index]
         return self._df.iloc[index]
@@ -71,8 +72,9 @@ class Curriculum:
     """Class for parsing and interfacing with curriculum data"""
     _DF_EMBEDDING_COLUMN_NAME = 'embedding'
 
-    def __init__(self, name: str, df: pd.DataFrame = None,
-                 *, table_path: Path | str = None, mapping_path: Path = None):
+    def __init__(self, name: str, df: Optional[pd.DataFrame] = None,
+                 *, table_path: Optional[Union[Path, str]] = None,
+                 mapping_path: Optional[Path] = None):
         self._name = name
 
         self.table_path = \
@@ -94,7 +96,7 @@ class Curriculum:
 
         self._mapping = Mapping(mapping_path)
 
-    def query(self, query: str | list[float] | np.ndarray,
+    def query(self, query: Union[str, list[float], np.ndarray],
               include_similarity=False
               ) -> pd.DataFrame:
         """Sort rows of internal DataFrame by how similar they are to query"""
@@ -141,7 +143,7 @@ class Curriculum:
         return self._table_path
 
     @table_path.setter
-    def table_path(self, new_path: Path | str):
+    def table_path(self, new_path: Union[Path, str]):
         self._table_path = Path(new_path)
 
     def __getitem__(self, index: str):
