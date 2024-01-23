@@ -25,7 +25,8 @@ UNDER_ALL_HEADERS = '=' * 3
 encoding = tiktoken.get_encoding('cl100k_base')
 
 stored_queries = \
-    pd.DataFrame(columns=['Description', 'Embedding'], index=pd.Index([], name='Name'))
+    pd.DataFrame(columns=['Description', 'Embedding'],
+                 index=pd.Index([], name='Name'))
 
 illegal_names = {opt.value for opt in MenuOption}
 
@@ -591,15 +592,15 @@ def saved_query_new_query_menu(entry: pd.Series):
 
         curriculum.mapping.remove(entry.name)
 
-        embedding = np.array(entry["Embedding"])
-        ranking = curriculum.query(embedding, include_similarity=True)
+    embedding = np.array(entry["Embedding"])
+    ranking = curriculum.query(embedding, include_similarity=True)
 
-        matching_row = present_ranking(ranking)
+    matching_row = present_ranking(ranking)
 
-        if matching_row is not None:
-            curriculum.mapping.add_mapping(
-                entry.name, entry['Description'], matching_row.name, matching_row['Description'])
-            return True
+    if matching_row is not None:
+        curriculum.mapping.add_mapping(
+            entry.name, entry['Description'], matching_row.name, matching_row['Description'])
+        return True
 
     return False
 
@@ -611,7 +612,8 @@ def saved_query_menu(entry: pd.Series):
     options = [MenuOption.QUERY.value, MenuOption.BACK.value]
 
     selection_number = \
-        print_list_and_query_input(entry.name, options, under_header=UNDER_ALL_HEADERS)
+        print_list_and_query_input(
+            entry.name, options, under_header=UNDER_ALL_HEADERS)
 
     selection = MenuOption(options[selection_number - 1])
 
@@ -631,7 +633,8 @@ def saved_menu():
     options = stored_queries.index.tolist() + options
 
     selection_number = \
-        print_list_and_query_input('Saved', options, under_header=UNDER_ALL_HEADERS)
+        print_list_and_query_input(
+            'Saved', options, under_header=UNDER_ALL_HEADERS)
     selection = MenuOption.from_value(options[selection_number - 1])
 
     if selection == MenuOption.BACK:
@@ -657,7 +660,8 @@ def main_loop():
         current_items = curriculums + items
 
         selection_number = \
-            print_list_and_query_input(header, current_items, under_header=UNDER_ALL_HEADERS)
+            print_list_and_query_input(
+                header, current_items, under_header=UNDER_ALL_HEADERS)
         current_selection = \
             MenuOption.from_value(current_items[selection_number - 1])
 
